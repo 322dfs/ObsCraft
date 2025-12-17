@@ -1,0 +1,88 @@
+#-- =============================================
+#-- log_analysis 数据库结构重建脚本
+#-- 生成时间: 2025-12-16
+#-- =============================================
+
+# 使用方式（在新环境重建
+#-- 1. 创建数据库（指定字符集）
+#CREATE DATABASE log_analysis CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+#-- 2. 使用数据库
+#USE log_analysis;
+
+#-- 3. 执行上面保存的 .sql 文件（或粘贴全部 CREATE TABLE 语句）
+
+
+
+
+CREATE TABLE `alert_records` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `alert_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '告警类型：high_traffic/error',
+  `client_ip` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '客户端IP',
+  `ip_location` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'IP地理位置',
+  `server_name` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '服务器名称',
+  `alert_message` text COLLATE utf8mb4_unicode_ci COMMENT '告警信息',
+  `status_code` int(11) DEFAULT NULL COMMENT 'HTTP状态码',
+  `request_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '请求URL',
+  `alert_level` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'warning' COMMENT '告警级别：info/warning/error/critical',
+  `is_processed` tinyint(1) DEFAULT '0' COMMENT '是否已处理',
+  `processed_at` datetime DEFAULT NULL COMMENT '处理时间',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '告警时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_alert_type` (`alert_type`),
+  KEY `idx_created_at` (`created_at`),
+  KEY `idx_is_processed` (`is_processed`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='告警记录表';
+
+CREATE TABLE `error_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `log_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '日志类型',
+  `server_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '服务器名称',
+  `error_message` text COLLATE utf8mb4_unicode_ci COMMENT '错误信息',
+  `client_ip` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '客户端IP',
+  `request_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '请求URL',
+  `ip_location` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'IP地理位置',
+  `timestamp` datetime NOT NULL COMMENT '错误发生时间',
+  `alert_sent` tinyint(1) DEFAULT '0' COMMENT '告警是否已发送',
+  `alert_sent_at` datetime DEFAULT NULL COMMENT '告警发送时间',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_timestamp` (`timestamp`),
+  KEY `idx_alert_sent` (`alert_sent`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='错误日志表';
+
+CREATE TABLE `nginx_access_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `log_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '日志类型：nginx-access/nginx-error',
+  `server_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '服务器名称',
+  `client_ip` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '客户端IP地址',
+  `ip_location` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'IP地理位置',
+  `request_method` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '请求方法：GET/POST等',
+  `request_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '请求URL',
+  `status_code` int(11) DEFAULT NULL COMMENT 'HTTP状态码',
+  `response_size` int(11) DEFAULT '0' COMMENT '响应大小',
+  `user_agent` text COLLATE utf8mb4_unicode_ci COMMENT '用户代理',
+  `referrer` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '来源页面',
+  `timestamp` datetime NOT NULL COMMENT '日志时间戳',
+  `is_high_traffic` tinyint(1) DEFAULT '0' COMMENT '是否高流量',
+  `is_error` tinyint(1) DEFAULT '0' COMMENT '是否错误日志',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_client_ip` (`client_ip`),
+  KEY `idx_timestamp` (`timestamp`),
+  KEY `idx_status_code` (`status_code`),
+  KEY `idx_is_error` (`is_error`),
+  KEY `idx_is_high_traffic` (`is_high_traffic`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Nginx访问日志表';
+
+CREATE TABLE `traffic_stats` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `client_ip` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '客户端IP',
+  `ip_location` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'IP地理位置',
+  `request_count` int(11) DEFAULT '0' COMMENT '请求次数',
+  `time_window` datetime NOT NULL COMMENT '时间窗口',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ip_time` (`client_ip`,`time_window`),
+  KEY `idx_time_window` (`time_window`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流量统计表';

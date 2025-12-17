@@ -1,0 +1,191 @@
+kafka1
+
+
+[root@kafka1 conf.d]# cat default.conf
+# 定义负载均衡后端（三个服务 - 使用公网IP）
+upstream flask_backends {
+    server 172.19.3.102:5000 weight=3;  # kafka1 - 主服务器
+    server 172.16.21.90:5000 weight=2;  # kafka2
+    server 172.16.21.91:5000 weight=2;  # kafka3
+    least_conn;  # 优先分配连接数少的后端
+    keepalive 32;  # 保持连接复用
+}
+
+# 主服务：处理 IP（47.111.191.93）和域名（subencai.cn）的访问
+server {
+    listen 80;
+    server_name 47.111.191.93 subencai.cn www.subencai.cn;
+
+    # ✅ 关键修复：指定使用标准 'main' 日志格式
+    access_log /personal-website/logs/access.log main;
+    error_log  /personal-website/logs/error.log warn;
+
+    # 静态资源代理 - 由于三台服务器都有完整代码，可以负载均衡或指定一台
+    location /static/ {
+        # 方案1：也走负载均衡（推荐，因为三台都有静态文件）
+        proxy_pass http://flask_backends;
+        # 方案2：指定主服务器（如果需要集中管理静态资源）
+        # proxy_pass http://47.111.191.93:5000/static/;
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # 静态资源缓存设置
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # 健康检查接口
+    location /health {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # API接口
+    location /api/ {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 主路径：负载均衡到三台后端服务器
+    location / {
+        proxy_pass http://flask_backends;
+        # 传递关键头信息
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 超时设置
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 60s;
+        # 调试用：显示当前访问的后端
+        add_header X-Backend-Server $upstream_addr;
+    }
+
+    # Nginx 状态页
+    location /nginx_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+
+    # 错误页面
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+kafka2
+
+
+[root@kafka2 conf.d]# ls
+load_balance.conf
+[root@kafka2 conf.d]# cat load_balance.conf 
+upstream flask_backends {
+    # 三个不同的后端应用
+    server 47.111.191.93:5001 weight=3;  # kafka1 - 完整Flask应用
+    server 47.118.27.144:8080 weight=2;  # kafka2 - 简易应用  
+    server 47.98.229.52:8080 weight=2;   # kafka3 - 简易应用
+    
+    least_conn;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name _;
+    
+    # 健康检查
+    location /health {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+    }
+    
+    # 主站点
+    location / {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        # 添加服务器标识头，便于调试
+        add_header X-Backend-Server $upstream_addr;
+    }
+    
+    # Nginx状态页
+    location /nginx_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+}
+
+
+
+
+
+
+
+
+
+kafka3
+
+[root@kafka3 conf.d]# ls
+load_balance.conf
+[root@kafka3 conf.d]# cat load_balance.conf 
+upstream flask_backends {
+    # 三个不同的后端应用
+    server 47.111.191.93:5001 weight=3;  # kafka1 - 完整Flask应用
+    server 47.118.27.144:8080 weight=2;  # kafka2 - 简易应用  
+    server 47.98.229.52:8080 weight=2;   # kafka3 - 简易应用
+    
+    least_conn;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name _;
+    
+    # 健康检查
+    location /health {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+    }
+    
+    # 主站点
+    location / {
+        proxy_pass http://flask_backends;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        # 添加服务器标识头，便于调试
+        add_header X-Backend-Server $upstream_addr;
+    }
+    
+    # Nginx状态页
+    location /nginx_status {
+        stub_status on;
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+    }
+}

@@ -1,0 +1,182 @@
+Kafka 3.6.1 KRaft 模式部署操作手册
+
+适用版本：kafka_2.13-3.6.1.tgz
+部署模式：KRaft（无 ZooKeeper）
+目标环境：CentOS / Ubuntu Linux（JDK 8+ 已安装）
+说明：本手册仅提供操作流程，具体配置文件由您提供，部署时直接复制即可。
+
+一、前期准备
+1. 确保已安装 Java
+   java -version
+
+二、安装 Kafka（所有节点统一操作）
+1. 上传压缩包至 /opt 目录
+   cd /opt
+2. 解压并创建软链接
+   tar -xzf kafka_2.13-3.6.1.tgz
+   ln -s kafka_2.13-3.6.1 kafka
+3. 进入 Kafka 目录
+   cd kafka
+
+三、集群初始化（仅需在一台节点执行）
+1. 生成集群 ID
+   bin/kafka-storage.sh random-uuid
+   👉 请记录输出的 UUID（如 X5jv9QqzR9mYnLkPwZrT1A==）
+
+四、配置文件部署（各节点独立操作）
+1. 复制配置文件
+   cp /path/to/your/server.properties config/kraft/server.properties
+
+即，将我们的配置文件覆盖默认的配置文件
+注意：
+配置文件里要填写集群id，将刚才生成的集群id替换我们的配置文件里面的id
+
+
+五、格式化存储目录（每台节点执行）
+CLUSTER_ID="X5jv9QqzR9mYnLkPwZrT1A"
+bin/kafka-storage.sh format -t $CLUSTER_ID -c config/kraft/server.properties
+
+六、启动 Kafka 服务（每台节点执行）
+推荐方式（后台运行）：
+nohup bin/kafka-server-start.sh config/kraft/server.properties > kafka.log 2>&1 &
+
+七、验证集群状态
+1. 查看进程：ps aux | grep kafka
+2. 查看端口：ss -tulnp | grep ':9092'
+
+
+
+之后进行：
+
+在任意一台节点创建测试 Topic
+
+cd /opt/kafka
+
+# 创建名为 "test-topic" 的 Topic（1 分区，副本因子=1）
+bin/kafka-topics.sh --create \
+  --topic test-topic \
+  --partitions 1 \
+  --replication-factor 1 \
+  --bootstrap-server 192.168.37.130:9092,192.168.37.131:9092,192.168.37.132:9092
+
+
+预期成功输出：
+Created topic test-topic.
+
+
+
+
+列出所有 Topic（验证是否创建成功）
+bin/kafka-topics.sh --list \
+  --bootstrap-server 192.168.37.130:9092
+
+
+ 预期输出：
+test-topic
+
+
+生产消息（Producer 测试）
+# 启动控制台 Producer
+bin/kafka-console-producer.sh \
+  --topic test-topic \
+  --bootstrap-server 192.168.37.130:9092
+
+终端会进入交互模式，输入任意文本并回车即发送：
+
+>Hello from kafka1!
+>This is a test message.
+
+
+
+
+
+消费消息（Consumer 测试）
+新开一个终端（或 SSH 新会话），执行：
+cd /opt/kafka
+
+# 从头开始消费 test-topic
+bin/kafka-console-consumer.sh \
+  --topic test-topic \
+  --from-beginning \
+  --bootstrap-server 192.168.37.130:9092
+
+
+预期输出（显示刚才发送的消息）：
+Hello from kafka1!
+This is a test message.
+
+
+然后下面的操作：
+
+Kafka 3.6.1 KRaft 模式部署操作手册（第七步及后续）
+
+适用环境：三台 CentOS 虚拟机，IP 分别为 192.168.37.130、131、132
+当前状态：Kafka 已启动，Filebeat 配置中的 Kafka 主题名为 nginx-log
+
+一、确认 Kafka 中已存在 nginx-log 主题
+
+1. 登录任意一台 Kafka 节点（例如 kafka1）
+2. 执行以下命令查看所有主题：
+   cd /opt/kafka
+   bin/kafka-topics.sh --list --bootstrap-server 192.168.37.130:9092
+
+3. 确认输出中包含：
+   nginx-log
+
+   如果没有，请先创建：
+   bin/kafka-topics.sh --create \
+     --topic nginx-log \
+     --partitions 1 \
+     --replication-factor 1 \
+     --bootstrap-server 192.168.37.130:9092,192.168.37.131:9092,192.168.37.132:9092
+
+二、确保 Filebeat 配置正确
+
+1. 检查 /etc/filebeat/filebeat.yml 中的 output.kafka 部分：
+   output.kafka:
+     hosts: ["192.168.37.130:9092", "192.168.37.131:9092", "192.168.37.132:9092"]
+     topic: "nginx-log"
+
+   注意：topic 必须是 nginx-log（不带 s）
+
+2. 重启 Filebeat 使配置生效：
+   systemctl restart filebeat
+
+三、验证日志是否成功发送到 Kafka
+
+1. 在任意 Kafka 节点上启动消费者，监听 nginx-log 主题：
+   cd /opt/kafka
+   bin/kafka-console-consumer.sh \
+     --topic nginx-log \
+     --from-beginning \
+     --bootstrap-server 192.168.37.130:9092
+
+2. 此时应看到不断有 Nginx 访问日志以 JSON 格式输出，例如：
+   {"message":"192.168.37.1 - - [16/Dec/2025:15:00:00 +0800] \"GET / HTTP/1.1\" 200 1234", "host_ip":"192.168.37.130", ...}
+
+3. 如果看到日志，说明整个链路（Nginx → Filebeat → Kafka）工作正常。
+
+四、常见问题排查
+
+- 如果消费者看不到日志：
+  1. 检查 Filebeat 是否运行：systemctl status filebeat
+  2. 查看 Filebeat 日志：tail -f /var/log/filebeat/filebeat
+  3. 确认 Nginx 日志路径是否被 Filebeat 监控（如 /var/log/nginx/access.log）
+  4. 确认防火墙是否放行 9092 端口
+
+- 如果提示 "Topic not found"：
+  说明 Kafka 中没有 nginx-log 主题，请按第一步创建。
+
+---
+说明：本流程基于你当前的配置（主题名为 nginx-log）编写，无需修改任何名称。
+
+
+
+
+走到这，kafka基本没问题了
+
+
+
+
+
+

@@ -1,0 +1,36 @@
+[root@kafka3 templates]# cat index.html 
+{% extends "base.html" %}
+
+{% block title %}首页 - 可观测性平台{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <h2>{{ project.name }}</h2>
+        <p class="subtitle">{{ project.description }}</p>
+        
+        <!-- 你的gw.jpg图片 -->
+        <div class="project-image">
+            
+        </div>
+        
+        <div class="project-status">
+            <h3>项目状态</h3>
+            <div class="status-card">
+                <p><strong>版本:</strong> {{ project.version }}</p>
+                <p><strong>状态:</strong> <span class="status-badge">{{ project.status }}</span></p>
+            </div>
+        </div>
+
+        <div class="features">
+            <h3>核心特性</h3>
+            <ul>
+                {% for feature in project.features %}
+                <li>{{ feature }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</section>
+{% endblock %}
+[root@kafka3 templates]# 

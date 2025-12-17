@@ -1,0 +1,24 @@
+[root@kafka3 templates]# cat about.html 
+{% extends "base.html" %}
+
+{% block title %}关于 - 可观测性平台{% endblock %}
+
+{% block content %}
+<section class="about">
+    <h2>关于本项目</h2>
+    <p>这是一个展示全链路可观测性技术的个人项目，体现了从日志采集到可视化监控的完整流程。</p>
+    
+    <div class="tech-stack">
+        <h3>技术栈</h3>
+        <ul>
+            <li>前端: Flask + HTML/CSS/JS</li>
+            <li>日志采集: Filebeat + Kafka</li>
+            <li>数据处理: Python消费者 + ELK Stack</li>
+            <li>监控告警: Celery + Redis + SMTP</li>
+            <li>可视化: Kibana + Grafana</li>
+            <li>系统监控: Prometheus</li>
+        </ul>
+    </div>
+</section>
+{% endblock %}
+[root@kafka3 templates]# 

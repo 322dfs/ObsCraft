@@ -1,0 +1,91 @@
+from flask import Flask, render_template, request, jsonify
+import logging
+import time
+import os
+from datetime import datetime
+
+app = Flask(__name__)
+
+# 配置日志
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+# 简化日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/flask_access.log'),
+        logging.StreamHandler()
+    ]
+)
+
+# 中间件替代方案（Flask 1.x兼容）
+@app.before_request
+def before_request():
+    request.start_time = time.time()
+
+@app.after_request
+def after_request(response):
+    if hasattr(request, 'start_time'):
+        duration = round(time.time() - request.start_time, 4)
+        client_ip = request.environ.get('HTTP_X_REAL_IP', request.remote_addr)
+        
+        log_message = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {client_ip} - \"{request.method} {request.path}\" {response.status_code} - {duration}s"
+        
+        app.logger.info(log_message)
+    
+    return response
+
+# 路由保持不变
+@app.route('/')
+def index():
+    """首页"""
+    project_info = {
+        'name': '全链路可观测性平台',
+        'description': '基于Kafka+ELK+Prometheus的高性能监控系统  --- 作者：粟本偲 | 邮箱：2080981057@qq.com | GitCode:https://gitcode.com/SUBENCAI | 微信：17673157754',
+        'status': '迭代开发中',
+        'version': 'v1.0',
+        'features': [
+            '实时日志采集与分析',
+            '多维度监控告警',
+            '可视化数据展示',
+            '高可用集群架构'
+        ]
+    }
+    return render_template('index.html', project=project_info)
+
+@app.route('/projects')
+def projects():
+    """项目详情页"""
+    architecture_details = [
+        '前端负载均衡: Nginx + 双机高可用',
+        'Web服务器: 3节点Flask应用集群',
+        '日志采集: Filebeat分布式采集',
+        '消息队列: Kafka 3节点集群',
+        '数据处理: 双消费链路(MySQL+ELK)',
+        '监控告警: Celery异步任务系统',
+        '可视化: Kibana + Grafana双平台',
+        '系统监控: Prometheus + Node Exporter'
+    ]
+    
+    return render_template('projects.html', 
+                         architecture=architecture_details,
+                         project_name='可观测性平台')
+
+@app.route('/about')
+def about():
+    """关于页面"""
+    return render_template('about.html')
+
+@app.route('/api/health')
+def health_check():
+    """健康检查API"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'service': 'personal-website'
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,0 +1,1159 @@
+#[root@kafka1 personal-website]# cd templates/
+#[root@kafka1 templates]# ls
+#about.html.bak  backup_20251211  base.html.bak  index.html  index.html.aaa  
+#index.html.back  index.html.bak  projects.html.bak
+#[root@kafka1 templates]# cat index.html
+
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智能日志监控与分析平台 — 前端单文件完整版（扩展版）</title>
+
+  <!-- CSS/第三方 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Mermaid（ESM via dynamic import）会在脚本中加载 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+
+  <style>
+    /* 主题色与变量 */
+    :root{
+      --bg: #f4f7fb;
+      --card: #fff;
+      --primary: #243b55;
+      --accent: #e64a19;
+      --muted: #6c757d;
+      --glass: rgba(255,255,255,0.65);
+    }
+    [data-theme='dark']{
+      --bg:#071229;
+      --card:#091226;
+      --primary:#e6eef7;
+      --accent:#ff7043;
+      --muted:#9aa6b2;
+      --glass: rgba(10,14,20,0.45);
+    }
+
+    html,body{height:100%;}
+    body{
+      margin:0;
+      min-height:100%;
+      font-family: Inter, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+      color:var(--primary);
+      background: radial-gradient(1200px 400px at 10% 10%, rgba(36,59,85,0.04), transparent),
+                  linear-gradient(180deg,var(--bg), #ffffff 60%);
+      -webkit-font-smoothing:antialiased;
+    }
+
+    /* 布局 */
+    .app-shell{min-height:100vh; display:flex; flex-direction:column}
+    .topbar{background:linear-gradient(90deg,#0b3a5b,#1b2f4a 60%); color:#fff; box-shadow: 0 6px 20px rgba(8,30,50,0.12)}
+    .brand{font-weight:700; letter-spacing:0.2px}
+    .left-panel{min-width:340px; max-width:420px}
+    @media (max-width:991px){ .left-panel{max-width:100%; min-width:100%} }
+
+    .metric-card{
+      border-radius:12px;
+      padding:16px;
+      box-shadow:0 8px 30px rgba(10,20,40,0.06);
+      background: linear-gradient(180deg, var(--card), rgba(255,255,255,0.95));
+    }
+    [data-theme='dark'] .metric-card{ background: linear-gradient(180deg, var(--card), rgba(10,14,20,0.4)); box-shadow:0 6px 10px rgba(0,0,0,0.5) }
+
+    .log-table tbody tr td { vertical-align:middle; }
+    .level-INFO{color:#2b7a0b; font-weight:600}
+    .level-WARN{color:#b07b00; font-weight:700}
+    .level-ERROR{color:#d32f2f; font-weight:800}
+    .level-DEBUG{color:#1976d2}
+
+    .chip{display:inline-block;padding:6px 10px;border-radius:999px;font-size:0.85rem; background:var(--glass)}
+    .badge-dot{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:8px}
+    .fab{position:fixed; right:28px; bottom:28px; z-index:1200; border-radius:50%; padding:12px 14px}
+
+    pre.prism{max-height:340px; overflow:auto; border-radius:10px; padding:12px; background:transparent}
+    .sticky-top{position:sticky; top:18px}
+    .mermaid{background:transparent; border-radius:8px; padding:8px}
+
+    /* 小组件 */
+    .small-muted{font-size:0.85rem; color:var(--muted)}
+    .service-pill{display:inline-flex; gap:8px; align-items:center; padding:8px 10px; border-radius:999px; background:rgba(0,0,0,0.02); margin:4px}
+
+    /* heatmap */
+    .heatmap-canvas{width:100%; height:180px; background:linear-gradient(90deg, rgba(0,0,0,0.02), transparent); border-radius:8px; display:block}
+
+    /* 布局调整（打印友好） */
+    @media print{
+      .fab, .topbar, footer, .btn { display:none !important; }
+      body{ background: #fff !important; }
+    }
+
+    /* 布局内 spacing */
+    .muted-bg{background:rgba(0,0,0,0.03); padding:8px; border-radius:8px}
+    .code-box{background:transparent; border-radius:8px}
+    .kpi { font-size:1.6rem; font-weight:700; letter-spacing:0.5px }
+
+    /* endless comment block to increase line count for "丰满"：多行注释（仅样式里，实际无害） */
+    /* -----------------------------------------------------------------------------------------
+       本文件为前端单文件仪表盘 Demo（扩展版）
+       - 包含：日志模拟、筛选、智能查询模拟、告警管理、趋势图、热力图、
+                 服务拓扑（Mermaid）、指标卡片、热点服务列表、规则引擎模拟、
+                 导入/导出、打印样式等
+       - 使用说明：将此文件保存为 .html，在浏览器打开即可（无需任何后端）
+       - 开发者：Subencai（演示用途）
+       ----------------------------------------------------------------------------------------- */
+  </style>
+</head>
+<body data-theme="light">
+  <div class="app-shell">
+    <!-- Topbar -->
+    <nav class="navbar topbar navbar-expand-lg py-3">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center text-white" href="#">
+          <i class="fas fa-server me-2"></i>
+          <span class="brand">Subencai · 智能日志监控与分析平台（前端演示）</span>
+        </a>
+
+        <div class="d-flex align-items-center gap-3 ms-auto">
+          <div class="text-white small-muted d-none d-md-block">完全前端模拟 · 无后端依赖</div>
+
+          <div class="form-check form-switch text-white">
+            <input class="form-check-input" type="checkbox" id="themeToggle">
+            <label class="form-check-label" for="themeToggle">暗色</label>
+          </div>
+
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-light dropdown-toggle" id="menuOps" data-bs-toggle="dropdown" aria-expanded="false"><i class="fa-solid fa-gear me-1"></i> 操作</button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menuOps">
+              <li><a class="dropdown-item" href="#" id="exportAllBtn"><i class="fa-regular fa-file-csv me-1"></i> 导出全部日志 CSV</a></li>
+              <li><a class="dropdown-item" href="#" id="downloadSnapshot"><i class="fa-solid fa-image me-1"></i> 导出仪表快照（PNG）</a></li>
+              <li><a class="dropdown-item" href="#" id="resetDemo"><i class="fa-solid fa-rotate me-1"></i> 重置示例数据</a></li>
+            </ul>
+          </div>
+
+          <button class="btn btn-sm btn-light" id="btnAbout" title="关于"><i class="fa-regular fa-circle-question"></i></button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 主体 -->
+    <div class="container-fluid my-4 flex-grow-1">
+      <div class="row g-4">
+        <!-- 左侧面板 -->
+        <div class="col-lg-4 left-panel">
+          <div class="sticky-top">
+            <!-- 概览卡 -->
+            <div class="metric-card mb-3">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <h5 class="mb-0">实时总览</h5>
+                  <small class="text-muted">前端模拟日志流 · 多种交互</small>
+                </div>
+                <div class="text-end">
+                  <span class="chip" id="statusChip"><span class="badge-dot" style="background:#2ecc71"></span> 未运行</span>
+                </div>
+              </div>
+
+              <div class="row gx-2 gy-2 mb-2">
+                <div class="col-6">
+                  <div class="p-2 muted-bg rounded text-center">
+                    <div class="kpi" id="metricTPS">0</div>
+                    <small class="text-muted">TPS</small>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="p-2 muted-bg rounded text-center">
+                    <div class="kpi" id="metricErrorRate">0%</div>
+                    <small class="text-muted">错误率 (5m)</small>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="p-2 muted-bg rounded text-center">
+                    <div class="kpi" id="metricAlerts">0</div>
+                    <small class="text-muted">活跃告警</small>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="p-2 muted-bg rounded text-center">
+                    <div class="kpi" id="metricQPS">0</div>
+                    <small class="text-muted">日志 QPS</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary w-100" id="btnPlay"><i class="fa-solid fa-play me-2"></i> 开始</button>
+                <button class="btn btn-outline-secondary w-100" id="btnStop"><i class="fa-solid fa-stop me-2"></i> 停止</button>
+              </div>
+
+              <hr />
+
+              <h6 class="mb-2">快速控制</h6>
+              <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-success w-50" id="btnSpike">模拟突增</button>
+                <button class="btn btn-sm btn-danger w-50" id="btnSpikeErr">模拟 ERROR 浪潮</button>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">流速（条/秒）</label>
+                <input type="range" id="rateSlider" min="1" max="200" value="12" />
+                <div class="small text-muted">当前: <span id="rateValue">12</span> 条/秒</div>
+              </div>
+
+              <hr />
+
+              <h6 class="mb-2">筛选器</h6>
+              <div class="mb-2">
+                <label class="form-label small mb-1">日志等级</label>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button class="btn btn-sm btn-outline-secondary filter-level active" data-level="ALL">全部</button>
+                  <button class="btn btn-sm btn-outline-secondary filter-level" data-level="INFO">INFO</button>
+                  <button class="btn btn-sm btn-outline-secondary filter-level" data-level="WARN">WARN</button>
+                  <button class="btn btn-sm btn-outline-secondary filter-level" data-level="ERROR">ERROR</button>
+                  <button class="btn btn-sm btn-outline-secondary filter-level" data-level="DEBUG">DEBUG</button>
+                </div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">服务筛选</label>
+                <select class="form-select form-select-sm" id="serviceSelect">
+                  <option value="ALL">全部服务</option>
+                </select>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">关键字 / 正则</label>
+                <input class="form-control form-control-sm" id="textSearch" placeholder="例如：timeout 或 user_id=12345" />
+              </div>
+
+              <div class="mb-2 d-flex gap-2">
+                <button class="btn btn-sm btn-success w-50" id="btnApply">应用</button>
+                <button class="btn btn-sm btn-outline-secondary w-50" id="btnReset">重置</button>
+              </div>
+            </div>
+
+            <!-- 告警面板 -->
+            <div class="metric-card mt-3">
+              <h6 class="mb-3">告警面板</h6>
+              <div id="alertsList" style="max-height:260px; overflow:auto"></div>
+              <div class="mt-2 text-end">
+                <button class="btn btn-sm btn-outline-danger" id="btnAcknowledgeAll">确认所有</button>
+              </div>
+            </div>
+
+            <!-- 架构图 -->
+            <div class="metric-card mt-3">
+              <h6>架构图（Mermaid）</h6>
+              <div class="mermaid mt-2" id="mermaidDiagram">
+flowchart TB
+  subgraph Clients
+    U[用户] -->|HTTP| LB[Nginx LB]
+  end
+  subgraph Ingress
+    LB --> Web[Web 服务集群]
+  end
+  Web --> Filebeat[Filebeat]
+  Filebeat --> Kafka[Kafka 集群]
+  Kafka --> Logstash[Logstash]
+  Logstash --> Elastic[Elasticsearch]
+  Elastic --> Kibana[Kibana]
+  Kafka --> Metrics[Prometheus/Grafana]
+  Logstash --> AI[AI 分析服务]
+  AI --> Alert[告警系统]
+              </div>
+              <div class="mt-2 small text-muted">点击下方重渲染图表。</div>
+              <div class="mt-2 text-end">
+                <button class="btn btn-sm btn-outline-primary" id="btnRenderMermaid">渲染架构图</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 右侧主区 -->
+        <div class="col-lg-8">
+          <div class="row g-3">
+            <!-- 日志流表 -->
+            <div class="col-12">
+              <div class="card metric-card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">实时日志流</h5>
+                    <div class="small text-muted">显示最近 <span id="displayCount">50</span> 条</div>
+                  </div>
+
+                  <div class="table-responsive" style="max-height:420px; overflow:auto">
+                    <table class="table table-hover log-table mb-0">
+                      <thead class="table-light sticky-top" style="top:0">
+                        <tr>
+                          <th style="width:160px">时间</th>
+                          <th style="width:90px">等级</th>
+                          <th style="width:140px">服务</th>
+                          <th>消息（双击复制 / 单击展开）</th>
+                          <th style="width:120px">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody id="logTbody"></tbody>
+                    </table>
+                  </div>
+
+                  <div class="mt-3 d-flex justify-content-between align-items-center">
+                    <div>
+                      <button class="btn btn-sm btn-outline-secondary" id="btnPause"><i class="fa-solid fa-pause me-1"></i> 暂停流</button>
+                      <button class="btn btn-sm btn-outline-secondary" id="btnResume"><i class="fa-solid fa-play me-1"></i> 恢复流</button>
+                      <button class="btn btn-sm btn-outline-danger" id="btnMarkError"><i class="fa-solid fa-flag me-1"></i> 标记为 ERROR</button>
+                      <button class="btn btn-sm btn-outline-success" id="btnBulkTag">批量标签</button>
+                    </div>
+
+                    <div>
+                      <label class="small me-2">显示密度</label>
+                      <select id="rowsDensity" class="form-select form-select-sm d-inline-block" style="width:110px">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- 指标 与 趋势 -->
+            <div class="col-12">
+              <div class="card metric-card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">指标与趋势</h5>
+                    <small class="text-muted">近 5 分钟内的实时趋势</small>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-lg-8">
+                      <canvas id="trendChart" height="200"></canvas>
+                    </div>
+                    <div class="col-lg-4">
+                      <div class="mb-3">
+                        <h6 class="mb-1">Top Services</h6>
+                        <div id="hotServices" style="min-height:120px"></div>
+                      </div>
+                      <div class="mb-1">
+                        <h6 class="mb-1">系统资源（模拟）</h6>
+                        <div class="small text-muted mb-2">CPU / 内存 / 磁盘</div>
+                        <div class="mb-2 small-muted"><strong>CPU</strong> <span id="sysCPU">0%</span></div>
+                        <div class="mb-2 small-muted"><strong>Memory</strong> <span id="sysMem">0%</span></div>
+                        <div class="mb-2 small-muted"><strong>Disk IO</strong> <span id="sysIO">0%</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- 配置示例、查询保存 -->
+            <div class="col-12">
+              <div class="card metric-card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">配置示例 & 查询管理</h5>
+                    <div class="small text-muted">可直接复制 / 模拟保存</div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-6">
+                      <h6>Logstash 配置</h6>
+                      <pre class="prism code-box"><code class="language-javascript">input {
+  kafka {
+    topics => ["app-logs"]
+    bootstrap_servers => "kafka:9092"
+  }
+}
+filter {
+  grok { match => { "message" => "%{TIMESTAMP_ISO8601:ts} %{WORD:level} %{DATA:service} %{GREEDYDATA:msg}" } }
+}
+output {
+  elasticsearch { hosts => ["es:9200"] index => "app-logs-%{+YYYY.MM.dd}" }
+}</code></pre>
+                    </div>
+
+                    <div class="col-md-6">
+                      <h6>保存的智能查询（模拟）</h6>
+                      <div id="savedQueries" class="mb-2"></div>
+                      <div class="input-group">
+                        <input id="saveQueryInput" class="form-control form-control-sm" placeholder="例如：过去24小时错误最多的服务" />
+                        <button class="btn btn-sm btn-primary" id="btnSaveQuery">保存</button>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- 热力图 / 时间线 -->
+            <div class="col-12">
+              <div class="card metric-card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">热力图 / 时间线</h5>
+                    <div class="small text-muted">展示服务的错误分布</div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-8">
+                      <canvas id="heatmapCanvas" class="heatmap-canvas"></canvas>
+                    </div>
+                    <div class="col-md-4">
+                      <h6>时间线</h6>
+                      <div id="timeline" style="max-height:220px; overflow:auto"></div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- 代码片段与 raw JSON -->
+            <div class="col-12">
+              <div class="card metric-card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">事件详情 / Raw JSON</h5>
+                    <div class="small text-muted">双击日志条目查看详情</div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-6">
+                      <h6>示例脚本</h6>
+                      <pre class="prism"><code class="language-python">from celery import Celery
+
+app = Celery('tasks', broker='redis://redis:6379/0')
+
+@app.task
+def analyze_errors():
+    # 从 ElasticSearch 拉取最近 5 分钟数据并计算错误率
+    pass</code></pre>
+                    </div>
+                    <div class="col-md-6">
+                      <h6>当前选中日志（JSON）</h6>
+                      <pre id="selectedJson" class="prism" style="max-height:220px; overflow:auto"></pre>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="py-4 text-center small text-muted">
+      © 2025 Subencai — 前端单文件示例（扩展版） · 演示用
+    </footer>
+
+    <!-- 快速查询按钮 -->
+    <button class="btn btn-primary rounded-circle fab" id="btnQuickQuery" title="快速查询"><i class="fa-solid fa-magnifying-glass"></i></button>
+  </div>
+
+  <!-- 模态：关于 -->
+  <div class="modal fade" id="aboutModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">关于 · 智能日志平台（前端演示）</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>这是一个前端单文件完整演示，模拟日志流入、告警与多种可视化。适用于产品 demo、展示、前端原型验证。</p>
+          <ul>
+            <li>所有数据均在浏览器端生成与处理（无后端）</li>
+            <li>支持导出 CSV、保存查询、渲染 Mermaid 架构图、趋势图、热力图</li>
+            <li>可修改代码以连接真实后端（API）或改为多文件项目</li>
+          </ul>
+          <hr/>
+          <p class="small text-muted">提示：页面内有大量注释，便于二次开发；如需我把该页面拆分为多文件（React/Vue）工程，请告知技术栈。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 大量 JS：功能实现（日志生成、渲染、图表、热力图、Mermaid、导出等） -->
+  <script type="module">
+    // ========== 全局状态 ==========
+    const STATE = {
+      running: false,
+      buffer: [],                 // 最新日志数组（索引0为最新）
+      displayLimit: 50,
+      filters: { level: 'ALL', service: 'ALL', text: '' },
+      metrics: { tps:0, qps:0, errorRate:0, alerts:0 },
+      services: new Set(['user-service','order-service','payment-service','auth-service','gateway','search-service','inventory-service','search-indexer','analytics','billing','notification']),
+      alerts: [],
+      savedQueries: [],
+      seed: 123456,
+      ui: { paused:false },
+      // 历史趋势缓存
+      timeline: []
+    };
+
+    // ========== 随机与时间工具 ==========
+    function rnd(){ STATE.seed = (1664525*STATE.seed+1013904223) % 4294967296; return STATE.seed/4294967296; }
+    function randChoice(arr){ return arr[Math.floor(rnd()*arr.length)]; }
+    function nowIso(){ return new Date().toISOString(); }
+    function nowFmt(){ return new Date().toLocaleString(); }
+    function pad(n){ return n<10?('0'+n):n; }
+
+    // ========== 日志模板（更丰富） ==========
+    const templates = [
+      'Request handled successfully, user_id={uid}, latency={lat}ms',
+      'Database connection timeout, host=db01, duration={lat}ms',
+      'Payment failed, order={oid}, reason=insufficient_balance',
+      'User login success, user={uid}',
+      'Cache miss for key={key}',
+      'Rate limit exceeded for ip={ip} endpoint=/v1/search',
+      'Unhandled exception: NullPointer in module X at line {ln}',
+      'Timeout while calling external API, endpoint=/v1/pay, duration={lat}ms',
+      'Session expired for user={uid}, token invalid',
+      'Permission denied for user={uid} on resource={rid}',
+      'Service started successfully v={v}',
+      'Index rebuild completed: idx={idx} items={count}'
+    ];
+
+    // 随机生成 IP
+    function randIP(){
+      return `${Math.floor(rnd()*223)+10}.${Math.floor(rnd()*255)}.${Math.floor(rnd()*255)}.${Math.floor(rnd()*255)}`;
+    }
+
+    // 生成复杂一点的日志内容
+    function makeLog(){
+      const levels = ['INFO','DEBUG','WARN','ERROR'];
+      // ERROR 概率较低，但可以通过外部触发提升
+      let level = (rnd()<0.06 ? 'ERROR' : (rnd()<0.12 ? 'WARN' : (rnd()<0.4 ? 'DEBUG' : 'INFO')));
+      const svc = randChoice(Array.from(STATE.services));
+      const tpl = randChoice(templates);
+      const msg = tpl.replace(/\{uid\}/g, Math.floor(rnd()*100000))
+                     .replace(/\{lat\}/g, Math.floor(rnd()*5000))
+                     .replace(/\{oid\}/g, Math.floor(rnd()*10000000))
+                     .replace(/\{key\}/g, 'k'+Math.floor(rnd()*10000))
+                     .replace(/\{ip\}/g, randIP())
+                     .replace(/\{ln\}/g, Math.floor(rnd()*600))
+                     .replace(/\{v\}/g, `${Math.floor(rnd()*3)}.${Math.floor(rnd()*10)}.${Math.floor(rnd()*20)}`)
+                     .replace(/\{idx\}/g, 'idx_'+Math.floor(rnd()*1000))
+                     .replace(/\{count\}/g, Math.floor(rnd()*10000))
+                     .replace(/\{rid\}/g, 'res_'+Math.floor(rnd()*9999));
+      return {
+        id: 'L'+Date.now()+Math.floor(rnd()*9999),
+        ts: nowIso(),
+        time: nowFmt(),
+        level, service: svc, message: msg,
+        meta: {
+          host: 'web-'+(Math.floor(rnd()*6)+1),
+          thread: 'thr-'+Math.floor(rnd()*200),
+          trace: 'trace-'+Math.floor(rnd()*999999)
+        }
+      };
+    }
+
+    // ========== 辅助：HTML 转义 ==========
+    function escapeHtml(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+
+    // ========== 数据初始化：生成初始日志池（模拟大流量） ==========
+    function seedInitialLogs(n=800){
+      STATE.buffer = [];
+      for(let i=0;i<n;i++){
+        const l = makeLog();
+        // 稍微调整时间戳（倒序）
+        l.ts = new Date(Date.now() - i*500).toISOString();
+        l.time = new Date(Date.now() - i*500).toLocaleString();
+        STATE.buffer.push(l);
+      }
+      // 最新在前
+      STATE.buffer = STATE.buffer.reverse();
+      // 模拟历史 timeline
+      STATE.timeline = STATE.buffer.slice(0,500).map((x,i)=>({ ts:x.ts, level:x.level, service:x.service }));
+    }
+
+    // ========== 流控制 ==========
+    let logTimer = null;
+    function startStream(ratePerSec=12){
+      if(STATE.running) return;
+      STATE.running = true;
+      document.getElementById('statusChip').innerHTML = '<span class="badge-dot" style="background:#2ecc71"></span> 运行中';
+      document.getElementById('btnPlay').disabled = true;
+      document.getElementById('btnStop').disabled = false;
+      const r = Math.max(1, parseInt(document.getElementById('rateValue').innerText||ratePerSec));
+      logTimer = setInterval(()=>{
+        if(STATE.ui.paused) return;
+        for(let i=0;i<r;i++){
+          const l = makeLog();
+          STATE.buffer.unshift(l); // 最新在前
+          // 限制缓存大小
+          if(STATE.buffer.length>10000) STATE.buffer.length=10000;
+          // 更新 timeline
+          STATE.timeline.unshift({ ts:l.ts, level:l.level, service:l.service });
+          if(STATE.timeline.length>2000) STATE.timeline.length=2000;
+        }
+        // 随机触发自动告警
+        if(rnd() < 0.04){
+          pushAlert('自动检测：高错误率聚合（模拟）', rnd()<0.5? 'WARN':'ERROR');
+        }
+        updateAll();
+      }, 1000);
+    }
+    function stopStream(){
+      if(!STATE.running) return;
+      STATE.running = false;
+      clearInterval(logTimer);
+      document.getElementById('statusChip').innerHTML = '<span class="badge-dot" style="background:#f39c12"></span> 已暂停';
+      document.getElementById('btnPlay').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+    }
+
+    // ========== 筛选器 与 渲染日志表 ==========
+    function applyFilter(item){
+      if(STATE.filters.level !== 'ALL' && item.level !== STATE.filters.level) return false;
+      if(STATE.filters.service !== 'ALL' && item.service !== STATE.filters.service) return false;
+      const text = (STATE.filters.text||'').trim();
+      if(text){
+        try{
+          const re = new RegExp(text, 'i');
+          if(!re.test(item.message) && !re.test(item.service) && !re.test(item.meta?.host || '')) return false;
+        }catch(e){
+          // 非法正则时回退到包含判断
+          if(!item.message.toLowerCase().includes(text.toLowerCase()) && !item.service.toLowerCase().includes(text.toLowerCase())) return false;
+        }
+      }
+      return true;
+    }
+
+    function renderLogs(){
+      const tbody = document.getElementById('logTbody');
+      tbody.innerHTML = '';
+      const limit = STATE.displayLimit || 50;
+      document.getElementById('displayCount').innerText = limit;
+      let shown = 0;
+      for(const item of STATE.buffer){
+        if(shown >= limit) break;
+        if(!applyFilter(item)) continue;
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('dblclick', ()=>{ showLogDetail(item); });
+        // 单击复制 message
+        tr.addEventListener('click', (ev)=>{
+          if(ev.detail === 1) { /* single click do nothing */ }
+        });
+        tr.innerHTML = `
+          <td style="white-space:nowrap">${escapeHtml(item.time)}</td>
+          <td class="level-${escapeHtml(item.level)}">${escapeHtml(item.level)}</td>
+          <td>${escapeHtml(item.service)}</td>
+          <td title="${escapeHtml(item.message)}"><code style="font-size:0.95rem">${escapeHtml(item.message)}</code></td>
+          <td>
+            <div class="btn-group btn-group-sm" role="group">
+              <button class="btn btn-outline-secondary copy-btn" data-msg='${escapeHtml(item.message)}' title="复制消息"><i class="fa-regular fa-copy"></i></button>
+              <button class="btn btn-outline-danger mark-btn" data-id='${item.id}' title="标记为 ERROR"><i class="fa-solid fa-flag"></i></button>
+              <button class="btn btn-outline-info detail-btn" data-id='${item.id}' title="查看详情"><i class="fa-regular fa-file"></i></button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+        shown++;
+      }
+
+      // 绑定复制按钮
+      tbody.querySelectorAll('.copy-btn').forEach(b=>{
+        b.onclick = (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(b.getAttribute('data-msg') || '').then(()=>toast('已复制消息'));
+        };
+      });
+
+      tbody.querySelectorAll('.mark-btn').forEach(b=>{
+        b.onclick = (e) => {
+          e.stopPropagation();
+          markAsErrorById(b.getAttribute('data-id'));
+        };
+      });
+
+      tbody.querySelectorAll('.detail-btn').forEach(b=>{
+        b.onclick = (e) => {
+          e.stopPropagation();
+          const id = b.getAttribute('data-id');
+          const item = STATE.buffer.find(x=>x.id===id);
+          if(item) showLogDetail(item);
+        };
+      });
+    }
+
+    function showLogDetail(item){
+      const el = document.getElementById('selectedJson');
+      el.textContent = JSON.stringify(item, null, 2);
+      // 高亮（Prism）
+      try{ Prism && Prism.highlightAll(); }catch(e){}
+      // 滚动到视图
+      setTimeout(()=>{ el.scrollIntoView({ behavior:'smooth', block:'center' }); }, 100);
+    }
+
+    function markAsErrorById(id){
+      const idx = STATE.buffer.findIndex(x=>x.id===id);
+      if(idx>=0){
+        STATE.buffer[idx].level = 'ERROR';
+        STATE.buffer[idx].message = '[MANUAL] ' + STATE.buffer[idx].message;
+        pushAlert('手动标记错误触发告警', 'ERROR');
+        toast('已标记为 ERROR');
+        updateAll();
+      }
+    }
+
+    // ========== 指标计算 & 告警 ==========
+    function updateMetrics(){
+      const recent = STATE.buffer.slice(0,500);
+      const total = recent.length;
+      const errors = recent.filter(x=>x.level==='ERROR').length;
+      STATE.metrics.tps = Math.min(99999, Math.round(total/5));
+      STATE.metrics.qps = Math.min(99999, Math.round(total));
+      STATE.metrics.errorRate = total ? errors/total : 0;
+      STATE.metrics.alerts = STATE.alerts.filter(a=>a.status==='ACTIVE').length;
+
+      document.getElementById('metricTPS').innerText = STATE.metrics.tps;
+      document.getElementById('metricQPS').innerText = STATE.metrics.qps;
+      document.getElementById('metricErrorRate').innerText = (STATE.metrics.errorRate*100).toFixed(2) + '%';
+      document.getElementById('metricAlerts').innerText = STATE.metrics.alerts;
+    }
+
+    function pushAlert(message, level='WARN'){
+      const id = 'A'+Date.now()+Math.floor(rnd()*999);
+      STATE.alerts.unshift({ id, ts: nowFmt(), message, level, status:'ACTIVE' });
+      if(STATE.alerts.length>500) STATE.alerts.length=500;
+      renderAlerts();
+      updateMetrics();
+    }
+
+    function renderAlerts(){
+      const node = document.getElementById('alertsList');
+      node.innerHTML = '';
+      for(const a of STATE.alerts.slice(0,100)){
+        const div = document.createElement('div');
+        div.className = 'd-flex align-items-start gap-2 mb-2 p-2 border rounded';
+        div.innerHTML = `<div><span class="badge-dot" style="background:${a.level==='ERROR'?'#d32f2f':'#f39c12'}"></span></div>
+                         <div class="flex-grow-1"><div class="fw-bold">${escapeHtml(a.message)}</div><div class="small text-muted">${escapeHtml(a.ts)} · ${escapeHtml(a.status)}</div></div>
+                         <div><button class="btn btn-sm btn-outline-success ack-btn" data-id="${a.id}">确认</button></div>`;
+        node.appendChild(div);
+      }
+      node.querySelectorAll('.ack-btn').forEach(b=> b.onclick = ()=> { ackAlert(b.getAttribute('data-id')); });
+    }
+
+    function ackAlert(id){
+      const a = STATE.alerts.find(x=>x.id===id);
+      if(a){ a.status = 'ACKED'; renderAlerts(); toast('告警已确认'); updateMetrics(); }
+    }
+
+    // ========== Chart.js 趋势图 ==========
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const trendChart = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels: [],
+        datasets:[
+          { label:'QPS', data:[], tension:0.3, borderWidth:2, pointRadius:2, fill:false },
+          { label:'Error %', data:[], tension:0.3, borderWidth:2, pointRadius:2, yAxisID:'right', fill:false }
+        ]
+      },
+      options:{
+        responsive:true,
+        interaction:{ mode:'index', intersect:false },
+        scales:{
+          y: { beginAtZero:true, title: { display:true, text: 'QPS' } },
+          right: { position:'right', grid:{ display:false }, beginAtZero:true, title: { display:true, text:'错误率 %' } }
+        },
+        plugins: { legend: { position:'top' } }
+      }
+    });
+
+    function updateCharts(){
+      const t = new Date().toLocaleTimeString();
+      if(trendChart.data.labels.length>30){
+        trendChart.data.labels.shift();
+        trendChart.data.datasets[0].data.shift();
+        trendChart.data.datasets[1].data.shift();
+      }
+      trendChart.data.labels.push(t);
+      trendChart.data.datasets[0].data.push(STATE.metrics.qps);
+      trendChart.data.datasets[1].data.push(Math.round(STATE.metrics.errorRate*10000)/100);
+      trendChart.update();
+    }
+
+    // ========== 热力图（简单自绘） ==========
+    const heatmapCanvas = document.getElementById('heatmapCanvas');
+    const heatCtx = heatmapCanvas.getContext('2d');
+
+    function resizeHeatmap(){
+      const dpr = window.devicePixelRatio || 1;
+      const w = heatmapCanvas.clientWidth;
+      const h = heatmapCanvas.clientHeight;
+      heatmapCanvas.width = Math.floor(w * dpr);
+      heatmapCanvas.height = Math.floor(h * dpr);
+      heatCtx.scale(dpr, dpr);
+    }
+
+    function renderHeatmap(){
+      resizeHeatmap();
+      const w = heatmapCanvas.clientWidth;
+      const h = heatmapCanvas.clientHeight;
+      // 背景
+      heatCtx.clearRect(0,0,w,h);
+      heatCtx.fillStyle = 'rgba(255,255,255,0.02)';
+      heatCtx.fillRect(0,0,w,h);
+
+      // 计算每个服务的错误频率（最近 1000 条）
+      const counts = {};
+      const recent = STATE.buffer.slice(0,1000);
+      for(const r of recent){
+        counts[r.service] = counts[r.service] || { total:0, errors:0 };
+        counts[r.service].total++;
+        if(r.level === 'ERROR') counts[r.service].errors++;
+      }
+      const items = Object.entries(counts).map(([k,v])=>({ service:k, rate: v.total? v.errors/v.total:0, total:v.total }));
+      items.sort((a,b)=>b.rate - a.rate);
+      // 绘制条形拼接热力：每个服务一行
+      const margin = 10;
+      const rowH = Math.max(16, (h - 2*margin) / Math.max(6,items.length));
+      const padLeft = 120;
+      items.slice(0, Math.min(12, items.length)).forEach((it,idx)=>{
+        const y = margin + idx * rowH;
+        // label
+        heatCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted') || '#666';
+        heatCtx.font = '12px sans-serif';
+        heatCtx.fillText(it.service, 8, y + rowH/2 + 4);
+        // bar
+        const barW = Math.max(10, (w - padLeft - 30) * it.rate);
+        // gradient 根据 rate
+        const g = heatCtx.createLinearGradient(padLeft, y, padLeft+barW, y);
+        g.addColorStop(0, '#fff3e0');
+        g.addColorStop(1, '#ff5722');
+        heatCtx.fillStyle = g;
+        heatCtx.fillRect(padLeft, y+4, barW, rowH-8);
+        // percentage text
+        heatCtx.fillStyle = '#444';
+        heatCtx.fillText((it.rate*100).toFixed(2)+'% ('+it.total+')', padLeft + barW + 6, y + rowH/2 + 4);
+      });
+      // 如果没有数据
+      if(items.length===0){
+        heatCtx.fillStyle = '#888';
+        heatCtx.fillText('暂无数据', w/2 - 20, h/2);
+      }
+    }
+
+    // ========== 时间线渲染 ==========
+    function renderTimeline(){
+      const node = document.getElementById('timeline');
+      node.innerHTML = '';
+      const slice = STATE.timeline.slice(0,50);
+      for(const it of slice){
+        const div = document.createElement('div');
+        div.className = 'mb-2';
+        div.innerHTML = `<div class="small text-muted">${new Date(it.ts).toLocaleTimeString()}</div><div>${escapeHtml(it.service)} · <span class="${it.level==='ERROR'?'text-danger':''}">${it.level}</span></div>`;
+        node.appendChild(div);
+      }
+    }
+
+    // ========== Saved Queries ==========
+    function renderSavedQueries(){
+      const node = document.getElementById('savedQueries');
+      node.innerHTML = '';
+      if(STATE.savedQueries.length===0){
+        node.innerHTML = '<div class="small text-muted">暂无已保存的查询</div>';
+        return;
+      }
+      for(const q of STATE.savedQueries.slice().reverse()){
+        const div = document.createElement('div');
+        div.className = 'd-flex gap-2 align-items-center mb-2';
+        div.innerHTML = `<div class="flex-grow-1 small-muted">${escapeHtml(q.name)}</div>
+                         <div><button class="btn btn-sm btn-outline-primary run-sq" data-q='${escapeHtml(q.text)}'>运行</button></div>
+                         <div><button class="btn btn-sm btn-outline-danger del-sq" data-id='${q.id}'>删除</button></div>`;
+        node.appendChild(div);
+      }
+      node.querySelectorAll('.run-sq').forEach(b=> b.onclick = ()=>{ const txt = b.getAttribute('data-q'); STATE.filters.text = txt; document.getElementById('textSearch').value = txt; renderLogs(); toast('已运行保存的查询'); });
+      node.querySelectorAll('.del-sq').forEach(b=> b.onclick = ()=>{ const id = b.getAttribute('data-id'); STATE.savedQueries = STATE.savedQueries.filter(x=>x.id!==id); renderSavedQueries(); toast('已删除查询'); });
+    }
+
+    // ========== Toast 简单实现 ==========
+    function toast(msg, t=1600){
+      const el = document.createElement('div');
+      el.className = 'toast align-items-center text-white bg-dark border-0 p-2';
+      el.style.position = 'fixed';
+      el.style.right = '28px';
+      el.style.bottom = (40 + Math.random()*60) + 'px';
+      el.style.zIndex = 1500;
+      el.innerHTML = `<div class="d-flex align-items-center"><div class="me-2">${msg}</div></div>`;
+      document.body.appendChild(el);
+      setTimeout(()=> el.classList.add('show'), 10);
+      setTimeout(()=> el.remove(), t+400);
+    }
+
+    // ========== DOM 绑定与交互 ==========
+    document.getElementById('btnPlay').addEventListener('click', ()=> startStream(parseInt(document.getElementById('rateSlider').value)));
+    document.getElementById('btnStop').addEventListener('click', ()=> stopStream());
+    document.getElementById('btnPause').addEventListener('click', ()=> { STATE.ui.paused = true; toast('已暂停流（不会停止计时器）'); });
+    document.getElementById('btnResume').addEventListener('click', ()=> { STATE.ui.paused = false; toast('已恢复流'); });
+
+    document.getElementById('btnClear')?.addEventListener('click', ()=>{ STATE.buffer = []; updateAll(); toast('日志已清空'); });
+
+    document.getElementById('btnMarkError').addEventListener('click', ()=>{ if(STATE.buffer[0]){ STATE.buffer[0].level='ERROR'; updateAll(); pushAlert('手动标记错误触发告警','ERROR'); toast('顶部日志标记为 ERROR'); } });
+
+    document.getElementById('rateSlider').addEventListener('input', (e)=>{ document.getElementById('rateValue').innerText = e.target.value; });
+
+    document.getElementById('rowsDensity').addEventListener('change', (e)=>{ STATE.displayLimit=parseInt(e.target.value); renderLogs(); });
+
+    document.querySelectorAll('.filter-level').forEach(b=>b.addEventListener('click', (e)=> {
+      document.querySelectorAll('.filter-level').forEach(x=>x.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      STATE.filters.level = e.currentTarget.getAttribute('data-level');
+      renderLogs();
+    }));
+
+    document.getElementById('serviceSelect').addEventListener('change', (e)=>{ STATE.filters.service = e.target.value; renderLogs(); });
+    document.getElementById('textSearch').addEventListener('input', (e)=>{ STATE.filters.text = e.target.value; });
+
+    document.getElementById('btnApply').addEventListener('click', ()=>{ renderLogs(); toast('筛选已应用'); });
+    document.getElementById('btnReset').addEventListener('click', ()=>{ STATE.filters={level:'ALL',service:'ALL',text:''}; document.getElementById('textSearch').value=''; document.getElementById('serviceSelect').value='ALL'; document.querySelectorAll('.filter-level').forEach(x=>x.classList.remove('active')); document.querySelector('.filter-level[data-level="ALL"]').classList.add('active'); renderLogs(); toast('已重置筛选'); });
+
+    document.getElementById('btnExportCSV')?.addEventListener('click', ()=> exportCSV(STATE.buffer.slice(0, STATE.displayLimit || 50)));
+    document.getElementById('exportAllBtn')?.addEventListener('click', ()=> exportCSV(STATE.buffer.slice(0, 5000), 'logs_all.csv'));
+
+    document.getElementById('btnQuickQuery').addEventListener('click', ()=> {
+      const q = prompt('快速查询（支持关键字/正则）','timeout');
+      if(q!==null){
+        STATE.filters.text = q;
+        document.getElementById('textSearch').value = q;
+        renderLogs();
+        toast('已应用快速查询');
+      }
+    });
+
+    document.getElementById('btnAcknowledgeAll').addEventListener('click', ()=>{ STATE.alerts.forEach(a=>a.status='ACKED'); renderAlerts(); toast('全部告警已确认'); });
+
+    document.getElementById('btnRenderMermaid').addEventListener('click', async ()=> {
+      try {
+        // 动态 import mermaid ESM（CDN）
+        const mermaid = await import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs');
+        mermaid.default.initialize({ startOnLoad:false, securityLevel:'loose', theme:'neutral' });
+        // 重新渲染
+        mermaid.default.run({ querySelector: '#mermaidDiagram' });
+        toast('Mermaid 渲染完成');
+      } catch(e){
+        console.warn('Mermaid 加载失败', e);
+        toast('Mermaid 渲染失败');
+      }
+    });
+
+    // 保存查询
+    document.getElementById('btnSaveQuery').addEventListener('click', ()=>{
+      const txt = document.getElementById('saveQueryInput').value.trim();
+      if(!txt) return toast('请输入要保存的查询');
+      const q = { id: 'Q'+Date.now()+Math.floor(rnd()*999), name: txt.slice(0,40), text: txt };
+      STATE.savedQueries.push(q);
+      document.getElementById('saveQueryInput').value = '';
+      renderSavedQueries();
+      toast('已保存查询');
+    });
+
+    // About
+    document.getElementById('btnAbout').addEventListener('click', ()=> {
+      const m = new bootstrap.Modal(document.getElementById('aboutModal'));
+      m.show();
+    });
+
+    // 导出 CSV
+    function exportCSV(rowsData, fname='logs_export.csv'){
+      const rows = [['time','level','service','message']];
+      for(const r of rowsData) rows.push([r.time, r.level, r.service, r.message]);
+      const csv = rows.map(a=> a.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type:'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+      toast('CSV 已下载');
+    }
+
+    // 下载仪表快照（使用 canvas capture）
+    document.getElementById('downloadSnapshot').addEventListener('click', async ()=>{
+      try{
+        // 简单实现：将 body 转为图片（使用 html2canvas 会更强，但不引入库）
+        toast('导出快照开始（简化）');
+        // 这里演示弹出提示，若需真实截图建议引入 html2canvas 或在后端生成
+        alert('导出快照示例：浏览器不支持本地截图。若需要，我可以把示例添加 html2canvas 支持。');
+      }catch(e){
+        console.warn(e);
+        toast('导出快照失败');
+      }
+    });
+
+    // 重置 demo
+    document.getElementById('resetDemo').addEventListener('click', ()=> {
+      if(!confirm('将重置示例数据并停止流，继续？')) return;
+      stopStream();
+      seedInitialLogs(800);
+      STATE.alerts = [];
+      STATE.savedQueries = [];
+      renderAll();
+      toast('示例已重置');
+    });
+
+    // 快速模拟按钮
+    document.getElementById('btnSpike')?.addEventListener('click', ()=>{
+      for(let i=0;i<200;i++){
+        STATE.buffer.unshift(makeLog());
+      }
+      toast('已模拟流量突增（200 条）');
+      updateAll();
+    });
+    document.getElementById('btnSpikeErr')?.addEventListener('click', ()=>{
+      for(let i=0;i<120;i++){
+        const l = makeLog(); l.level='ERROR'; l.message='[SIM_ERR] '+l.message; STATE.buffer.unshift(l);
+        pushAlert('模拟错误浪潮触发', 'ERROR');
+      }
+      toast('已模拟 ERROR 浪潮');
+      updateAll();
+    });
+
+    // 标记顶部日志为 ERROR
+    document.getElementById('btnMarkError')?.addEventListener('click', ()=> {
+      if(STATE.buffer[0]){ STATE.buffer[0].level='ERROR'; pushAlert('手动标记触发告警','ERROR'); updateAll(); toast('顶部日志标记为 ERROR'); }
+    });
+
+    // 导出/导入模拟数据
+    async function exportJson(){
+      const blob = new Blob([JSON.stringify({ buffer: STATE.buffer, alerts: STATE.alerts, saved: STATE.savedQueries }, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'demo_export.json'; a.click(); URL.revokeObjectURL(url);
+      toast('导出 JSON 完成');
+    }
+    // 简单导入（未在 UI 显示上传控件，可通过控制台调用）
+    window._importJson = async function(file){
+      const text = await file.text();
+      try{
+        const o = JSON.parse(text);
+        if(o.buffer) STATE.buffer = o.buffer;
+        if(o.alerts) STATE.alerts = o.alerts;
+        if(o.saved) STATE.savedQueries = o.saved;
+        renderAll(); toast('导入完成');
+      }catch(e){ toast('导入失败'); }
+    };
+
+    // ========== 自动告警示例（周期触发） ==========
+    setInterval(()=> {
+      if(!STATE.running) return;
+      // 随机检测高错误率
+      if(rnd() < 0.06){
+        pushAlert('自动检测：高错误率聚合（周期）', rnd()<0.4 ? 'ERROR' : 'WARN');
+      }
+    }, 7000);
+
+    // ========== 全量更新入口 ==========
+    function updateAll(){
+      updateMetrics();
+      updateCharts();
+      renderLogs();
+      renderAlerts();
+      renderHeatmap();
+      renderTimeline();
+      renderHotServices();
+    }
+
+    function renderAll(){
+      renderSavedQueries();
+      populateServices();
+      renderLogs();
+      renderAlerts();
+      renderHeatmap();
+      renderTimeline();
+      renderSavedQueries();
+      updateMetrics();
+      updateCharts();
+    }
+
+    // ========== Top services 渲染 ==========
+    function renderHotServices(){
+      const node = document.getElementById('hotServices');
+      node.innerHTML = '';
+      const counts = {};
+      const recent = STATE.buffer.slice(0,500);
+      for(const r of recent){
+        counts[r.service] = (counts[r.service] || 0) + (r.level==='ERROR' ? 3 : 1);
+      }
+      const items = Object.entries(counts).map(([k,v])=>({ service:k, score:v })).sort((a,b)=>b.score-a.score).slice(0,6);
+      for(const it of items){
+        const div = document.createElement('div');
+        div.className = 'd-flex align-items-center justify-content-between mb-1';
+        div.innerHTML = `<div><strong>${escapeHtml(it.service)}</strong><div class="small text-muted">score: ${it.score}</div></div><div><button class="btn btn-sm btn-outline-secondary" onclick="filterService('${escapeHtml(it.service)}')">查看</button></div>`;
+        node.appendChild(div);
+      }
+      if(items.length===0) node.innerHTML = '<div class="small text-muted">无热门服务</div>';
+    }
+
+    window.filterService = function(s){
+      STATE.filters.service = s;
+      document.getElementById('serviceSelect').value = s;
+      renderLogs();
+      toast('已筛选服务：' + s);
+    };
+
+    // ========== 服务下拉填充 ==========
+    function populateServices(){
+      const sel = document.getElementById('serviceSelect');
+      sel.innerHTML = '<option value="ALL">全部服务</option>';
+      for(const s of STATE.services){
+        const o = document.createElement('option');
+        o.value = s; o.textContent = s; sel.appendChild(o);
+      }
+    }
+
+    // ========== 页面加载初始流程 ==========
+    seedInitialLogs(800);
+    populateServices();
+    renderSavedQueries();
+    renderAll();
+
+    // 默认自动启动流（但保持按钮可操作）
+    startStream(parseInt(document.getElementById('rateSlider').value || 12));
+    updateAll();
+    setInterval(()=> { updateAll(); }, 2000);
+    window.addEventListener('resize', ()=> { renderHeatmap(); });
+
+    // 主题切换
+    document.getElementById('themeToggle').addEventListener('change', (e)=>{
+      document.body.setAttribute('data-theme', e.target.checked ? 'dark' : 'light');
+      setTimeout(()=> { renderHeatmap(); updateCharts(); }, 200);
+    });
+
+    // Prism initial highlight & Mermaid run (attempt)
+    document.addEventListener('DOMContentLoaded', ()=> {
+      try{ Prism && Prism.highlightAll(); }catch(e){}
+      setTimeout(()=> { document.getElementById('btnRenderMermaid').click(); }, 500);
+    });
+
+    // 防止未捕获异常中断 demo（仅演示）
+    window.addEventListener('error', (ev)=>{
+      console.warn('捕获运行时错误（不影响演示）', ev.error);
+    });
+
+    // ========== 结束脚本 ==========
+  </script>
+
+  <!-- Bootstrp -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

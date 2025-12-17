@@ -1,0 +1,28 @@
+[root@kafka3 templates]# cat projects.html 
+{% extends "base.html" %}
+
+{% block title %}项目详情 - {{ project_name }}{% endblock %}
+
+{% block content %}
+<section class="project-detail">
+    <h2>{{ project_name }} 技术架构</h2>
+    
+    <div class="architecture">
+        <h3>系统架构</h3>
+        <ul>
+            {% for item in architecture %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="demo-links">
+        <h3>演示接口</h3>
+        <div class="api-links">
+            <a href="{{ url_for('health_check') }}" target="_blank">健康检查API</a>
+           
+        </div>
+    </div>
+</section>
+{% endblock %}
+[root@kafka3 templates]# 

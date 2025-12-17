@@ -1,0 +1,124 @@
+[root@kafka1 filebeat]# cat filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/access.log
+  fields:
+    server_name: "personal-website"
+    server: "kafka1"          # 自动识别主机名（kafka1/kafka2/kafka3）
+    server_role: "nginx_lb"
+    environment: "production"
+    log_type: "nginx-access"
+
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/error.log
+  fields:
+    server_name: "personal-website"   # ← 统一服务名！不要写 kafka1
+    server: "kafka1"            # 自动填主机名
+    log_type: "nginx-error"
+    environment: "production"
+
+output.kafka:
+  enabled: true
+  hosts: ["kafka1:9092", "kafka2:9092", "kafka3:9092"]
+  topic: "nginx-log"
+  version: "2.0.0"
+  required_acks: 1
+  compression: gzip
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+
+
+
+
+
+=======
+
+
+
+
+[root@kafka2 filebeat]# cat filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/access.log
+  fields:
+    server_name: "personal-website"
+    server: "kafka2"      
+    server_role: "nginx_lb"
+    environment: "production"
+    log_type: "nginx-access"
+
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/error.log
+  fields:
+    server_name: "personal-website"   # ← 统一服务名！不要写 kafka1
+    server: "kafka2"            # 自动填主机名
+    log_type: "nginx-error"
+    environment: "production"
+
+output.kafka:
+  enabled: true
+  hosts: ["kafka1:9092", "kafka2:9092", "kafka3:9092"]
+  topic: "nginx-log"
+  version: "2.0.0"
+  required_acks: 1
+  compression: gzip
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+
+
+  ===========
+
+
+
+[root@kafka3 filebeat]# cat filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/access.log
+  fields:
+    server_name: "personal-website"
+    server: "kafka3"          # 自动识别主机名（kafka1/kafka2/kafka3）
+    server_role: "nginx_lb"
+    environment: "production"
+    log_type: "nginx-access"
+
+- type: log
+  enabled: true
+  paths:
+    - /personal-website/logs/error.log
+  fields:
+    server_name: "personal-website"   # ← 统一服务名！不要写 kafka1
+    server: "kafka3"            # 自动填主机名
+    log_type: "nginx-error"
+    environment: "production"
+
+output.kafka:
+  enabled: true
+  hosts: ["kafka1:9092", "kafka2:9092", "kafka3:9092"]
+  topic: "nginx-log"
+  version: "2.0.0"
+  required_acks: 1
+  compression: gzip
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
