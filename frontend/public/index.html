@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日志监控平台</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; margin-bottom: 20px; border-radius: 10px; }
+        .header h1 { font-size: 24px; margin-bottom: 10px; }
+        .nav { display: flex; gap: 10px; margin-top: 15px; }
+        .nav button { padding: 10px 20px; border: none; background: rgba(255,255,255,0.2); color: white; border-radius: 5px; cursor: pointer; transition: all 0.3s; }
+        .nav button:hover, .nav button.active { background: rgba(255,255,255,0.4); }
+        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .service-card { background: #f8f9fa; border-radius: 8px; padding: 15px; border-left: 4px solid #28a745; }
+        .service-card.error { border-left-color: #dc3545; }
+        .service-card.warning { border-left-color: #ffc107; }
+        .service-card h3 { font-size: 16px; margin-bottom: 8px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .status-running { background: #d4edda; color: #155724; }
+        .status-stopped { background: #f8d7da; color: #721c24; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:hover { background: #f8f9fa; }
+        .log-error { background: #fff5f5; }
+        .log-warning { background: #fffbeb; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .metric { background: white; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .metric-value { font-size: 32px; font-weight: bold; color: #667eea; }
+        .metric-label { color: #666; margin-top: 5px; }
+        .alert-item { background: #fff5f5; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 10px; border-radius: 0 8px 8px 0; }
+        .alert-warning { background: #fffbeb; border-left-color: #ffc107; }
+        .ai-analysis { background: #f0f9ff; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 14px; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>📊 轻量级日志监控平台</h1>
+                <p>实时监控 · AI告警 · 智能运维</p>
+                <div class="nav">
+                    <button :class="{ active: currentPage === 'home' }" @click="currentPage = 'home'">🏠 首页</button>
+                    <button :class="{ active: currentPage === 'logs' }" @click="currentPage = 'logs'; loadLogs()">📋 日志</button>
+                    <button :class="{ active: currentPage === 'alerts' }" @click="currentPage = 'alerts'; loadAlerts()">🚨 告警</button>
+                    <button @click="triggerError(404)">触发404</button>
+                    <button @click="triggerError(500)" style="background: #dc3545;">触发500</button>
+                    <button @click="testAlert('404')" style="background: #ffc107; color: #333;">测试404告警</button>
+                    <button @click="testAlert('500')" style="background: #dc3545;">测试500告警</button>
+                </div>
+            </div>
+
+            <!-- 首页 -->
+            <div v-if="currentPage === 'home'">
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value">{{ metrics.cpu_usage?.toFixed(1) || 0 }}%</div>
+                        <div class="metric-label">CPU使用率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{{ metrics.memory_usage?.toFixed(1) || 0 }}%</div>
+                        <div class="metric-label">内存使用率</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{{ metrics.requests_per_second || 0 }}</div>
+                        <div class="metric-label">请求/秒</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{{ metrics.active_connections || 0 }}</div>
+                        <div class="metric-label">活跃连接</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>服务状态</h2>
+                    <div class="grid">
+                        <div v-for="service in services" :key="service.name" 
+                             class="service-card" 
+                             :class="{ error: service.status === 'stopped', warning: service.status === 'unknown' }">
+                            <h3>{{ service.name }}</h3>
+                            <p>端口: {{ service.port }}</p>
+                            <span class="status-badge" :class="'status-' + service.status">{{ service.status }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>快速操作</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" @click="loadServices">🔄 刷新服务状态</button>
+                        <a href="http://114.55.242.250:3000" target="_blank" class="btn btn-primary" style="text-decoration: none;">📈 打开Grafana</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 日志页 -->
+            <div v-if="currentPage === 'logs'">
+                <div class="card">
+                    <h2>最近日志 <button class="btn btn-primary" style="float: right;" @click="loadLogs">刷新</button></h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>来源</th>
+                                <th>类型</th>
+                                <th>IP</th>
+                                <th>URL</th>
+                                <th>状态码</th>
+                                <th>消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="log in logs" :key="log.id" 
+                                :class="{ 'log-error': log.status_code >= 500, 'log-warning': log.status_code >= 400 && log.status_code < 500 }">
+                                <td>{{ log.timestamp }}</td>
+                                <td>{{ log.source }}</td>
+                                <td>{{ log.log_type }}</td>
+                                <td>{{ log.ip_address }}</td>
+                                <td>{{ log.url }}</td>
+                                <td>{{ log.status_code }}</td>
+                                <td>{{ log.message?.substring(0, 50) }}...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="logs.length === 0" class="loading">暂无日志数据</div>
+                </div>
+            </div>
+
+            <!-- 告警页 -->
+            <div v-if="currentPage === 'alerts'">
+                <div class="card">
+                    <h2>告警列表 <button class="btn btn-primary" style="float: right;" @click="loadAlerts">刷新</button></h2>
+                    <div v-for="alert in alerts" :key="alert.id" 
+                         class="alert-item" 
+                         :class="{ 'alert-warning': alert.alert_type === 'warning' }">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>{{ alert.alert_type === 'error' ? '🔴 错误' : '🟡 警告' }} - {{ alert.status_code }}</strong>
+                            <span>{{ alert.timestamp }}</span>
+                        </div>
+                        <p style="margin: 10px 0;">{{ alert.message }}</p>
+                        <p><strong>URL:</strong> {{ alert.url }}</p>
+                        <div class="ai-analysis" v-if="alert.ai_analysis">
+                            <strong>🤖 AI分析:</strong>
+                            <pre style="white-space: pre-wrap; margin-top: 5px;">{{ alert.ai_analysis }}</pre>
+                        </div>
+                    </div>
+                    <div v-if="alerts.length === 0" class="loading">暂无告警</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentPage = ref('home');
+                const services = ref([]);
+                const logs = ref([]);
+                const alerts = ref([]);
+                const metrics = ref({});
+
+                const loadServices = async () => {
+                    try {
+                        const res = await fetch('/api/services');
+                        const data = await res.json();
+                        services.value = data.services || [];
+                    } catch (e) {
+                        console.error('加载服务失败:', e);
+                    }
+                };
+
+                const loadLogs = async () => {
+                    try {
+                        const res = await fetch('/api/logs');
+                        const data = await res.json();
+                        logs.value = data.logs || [];
+                    } catch (e) {
+                        console.error('加载日志失败:', e);
+                        logs.value = [];
+                    }
+                };
+
+                const loadAlerts = async () => {
+                    try {
+                        const res = await fetch('/api/alerts');
+                        const data = await res.json();
+                        alerts.value = data.alerts || [];
+                    } catch (e) {
+                        console.error('加载告警失败:', e);
+                        alerts.value = [];
+                    }
+                };
+
+                const loadMetrics = async () => {
+                    try {
+                        const res = await fetch('/api/metrics');
+                        metrics.value = await res.json();
+                    } catch (e) {
+                        console.error('加载指标失败:', e);
+                    }
+                };
+
+                const triggerError = async (code) => {
+                    try {
+                        await fetch(`/api/error/${code}`);
+                        alert(`已触发${code}错误，请稍后查看日志和告警`);
+                    } catch (e) {
+                        console.error('触发错误失败:', e);
+                    }
+                };
+
+                const testAlert = async (type) => {
+                    try {
+                        const res = await fetch('/api/test-alert', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: type, url: '/test/' + type })
+                        });
+                        const data = await res.json();
+                        alert(`测试告警已创建！\n\n${data.alert.ai_analysis}`);
+                        loadAlerts();
+                    } catch (e) {
+                        console.error('创建测试告警失败:', e);
+                    }
+                };
+
+                onMounted(() => {
+                    loadServices();
+                    loadMetrics();
+                    setInterval(loadMetrics, 5000);
+                });
+
+                return {
+                    currentPage,
+                    services,
+                    logs,
+                    alerts,
+                    metrics,
+                    loadServices,
+                    loadLogs,
+                    loadAlerts,
+                    triggerError,
+                    testAlert
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

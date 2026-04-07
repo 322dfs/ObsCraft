@@ -1,0 +1,314 @@
+version: '3.8'
+
+services:
+  nginx-gateway:
+    image: nginx:alpine
+    container_name: log-nginx
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - web-app
+      - frontend
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web-app:
+    build: ./web-app
+    container_name: log-web
+    restart: always
+    expose:
+      - "5000"
+    volumes:
+      - ./web-app/logs:/app/logs
+    networks:
+      - log-network
+    external_links:
+      - subencai-mysql:mysql
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      - FLASK_ENV=production
+      - MYSQL_HOST=subencai-mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DB=log_monitor
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  filebeat:
+    image: elastic/filebeat:8.11.0
+    container_name: log-filebeat
+    restart: always
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./nginx/logs:/var/log/nginx:ro
+      - ./web-app/logs:/var/log/webapp:ro
+    depends_on:
+      - kafka
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+    command: filebeat -e -strict.perms=false
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: log-zookeeper
+    restart: always
+    expose:
+      - "2181"
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: log-kafka
+    restart: always
+    expose:
+      - "9092"
+    depends_on:
+      - zookeeper
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 448M
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NUM_PARTITIONS=3
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=1
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_HEAP_OPTS=-Xmx320m -Xms160m
+
+  redis:
+    image: redis:7-alpine
+    container_name: log-redis
+    restart: always
+    expose:
+      - "6379"
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: log-redis-exporter
+    restart: always
+    expose:
+      - "9121"
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: log-mysql-exporter
+    restart: always
+    expose:
+      - "9104"
+    volumes:
+      - ./mysql-exporter/.my.cnf:/.my.cnf:ro
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: log-kafka-exporter
+    restart: always
+    expose:
+      - "9308"
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    command: --kafka.server=kafka:9092
+
+  log-processor:
+    build: ./log-processor
+    container_name: log-processor
+    restart: always
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - log-network
+    external_links:
+      - subencai-mysql:mysql
+    volumes:
+      - ./celery-worker:/app/celery_tasks:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      - KAFKA_SERVER=kafka:9092
+      - MYSQL_HOST=subencai-mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DB=log_monitor
+      - REDIS_HOST=redis
+      - DEEPSEEK_API_KEY=your_deepseek_api_key_here
+      - DEEPSEEK_API_URL=https://api.deepseek.com/v1/chat/completions
+
+  celery-worker:
+    build: ./celery-worker
+    container_name: log-celery-worker
+    restart: always
+    depends_on:
+      - redis
+    networks:
+      - log-network
+    external_links:
+      - subencai-mysql:mysql
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MYSQL_HOST=subencai-mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DB=log_monitor
+      - SMTP_SERVER=smtp.qq.com
+      - SMTP_PORT=587
+      - SMTP_USER=2080981057@qq.com
+      - SMTP_PASSWORD=your_smtp_authorization_code_here
+      - DINGTALK_WEBHOOK=
+    command: celery -A tasks worker --loglevel=info --concurrency=2 -Q celery,email,dingtalk
+
+  celery-beat:
+    build: ./celery-worker
+    container_name: log-celery-beat
+    restart: always
+    depends_on:
+      - redis
+      - celery-worker
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MYSQL_HOST=subencai-mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DB=log_monitor
+    command: celery -A tasks beat --loglevel=info
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: log-prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=1d'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: log-grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+  frontend:
+    build: ./frontend
+    container_name: log-frontend
+    restart: always
+    expose:
+      - "80"
+    networks:
+      - log-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    environment:
+      - VITE_API_URL=http://nginx-gateway/api
+
+networks:
+  log-network:
+    driver: bridge
+    external: false
+
+volumes:
+  prometheus-data:
