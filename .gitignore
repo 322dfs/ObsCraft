@@ -1,0 +1,30 @@
+﻿# Runtime data directories
+data/
+data/logs/
+data/kafka-*/
+data/mysql/
+data/redis/
+data/grafana/
+data/prometheus/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

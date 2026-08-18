@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Server</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: white;
+        }
+        .card {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 40px 60px;
+            border-radius: 16px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        h1 { font-size: 2.5em; margin: 0 0 10px; }
+        p { font-size: 1.2em; opacity: 0.9; margin: 5px 0; }
+        .hint { margin-top: 20px; font-size: 0.9em; opacity: 0.7; }
+        .error-link { 
+            display: inline-block; margin: 5px; padding: 8px 20px;
+            background: rgba(255,255,255,0.2); border-radius: 8px;
+            text-decoration: none; color: white; transition: background 0.3s;
+        }
+        .error-link:hover { background: rgba(255,255,255,0.35); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Log Platform</h1>
+        <p>Nginx Web Server</p>
+        <p>Refresh to test load balancing &amp; log collection</p>
+        <div class="hint">
+            <a href="/error" class="error-link">Trigger 500 Error</a>
+            <a href="/notfound" class="error-link">Trigger 404 Error</a>
+        </div>
+    </div>
+</body>
+</html>

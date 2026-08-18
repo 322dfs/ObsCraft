@@ -1,0 +1,40 @@
+# Prometheus 配置文件
+# 作用：采集各组件指标，存入时序数据库，供Grafana展示
+# 采集目标：主机系统指标、Kafka指标、MySQL指标、Redis指标、Filebeat指标、容器资源指标
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # 1. 主机系统指标（CPU/内存/磁盘/网络）通过node-exporter采集
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # 2. Kafka集群指标（Topic分区/Consumer Lag/消息吞吐量）通过kafka-exporter采集
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+
+  # 3. MySQL数据库指标（连接数/QPS/缓冲池/慢查询）通过mysqld-exporter采集
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysqld-exporter:9104']
+
+  # 4. Redis指标（内存/命令/连接数）通过redis-exporter采集
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # 5. Docker容器资源指标（CPU/内存/网络IO/磁盘IO）通过cAdvisor采集
+  #    Filebeat容器的CPU/内存等资源指标也由cAdvisor覆盖
+  #    Filebeat HTTP监控(/stats)仅支持JSON格式，Prometheus无法直接采集
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # 6. Prometheus自身指标
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

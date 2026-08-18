@@ -1,0 +1,57 @@
+# Filebeat 配置文件
+# 作用：采集3台Web服务器的access.log和error.log，生产到Kafka的log-topic
+# 原理：通过Docker volume挂载宿主机的 data/logs 目录，Filebeat从 /logs/ 下读取日志
+
+filebeat.inputs:
+# Web-1 的日志
+- type: log
+  enabled: true
+  paths:
+    - /logs/web-1/access.log
+    - /logs/web-1/error.log
+  fields:
+    server_name: web-1
+  fields_under_root: true
+
+# Web-2 的日志
+- type: log
+  enabled: true
+  paths:
+    - /logs/web-2/access.log
+    - /logs/web-2/error.log
+  fields:
+    server_name: web-2
+  fields_under_root: true
+
+# Web-3 的日志
+- type: log
+  enabled: true
+  paths:
+    - /logs/web-3/access.log
+    - /logs/web-3/error.log
+  fields:
+    server_name: web-3
+  fields_under_root: true
+
+# 输出到Kafka集群
+output.kafka:
+  enabled: true
+  hosts: ["kafka-1:9092", "kafka-2:9092", "kafka-3:9092"]
+  topic: "log-topic"
+  partition.round_robin:
+    reachable_only: true
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+  keepfiles: 2
+
+# HTTP监控端点，供Prometheus采集Filebeat指标
+http.enabled: true
+http.port: 5066
+http.host: 0.0.0.0

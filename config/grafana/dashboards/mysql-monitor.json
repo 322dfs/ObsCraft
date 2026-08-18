@@ -1,0 +1,84 @@
+{
+  "annotations": { "list": [] },
+  "title": "MySQL数据库监控",
+  "uid": "mysql-monitor",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["mysql", "mysqld-exporter"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "当前连接数",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 50}, {"color": "red", "value": 100}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "mysql_global_status_threads_connected{job=\"mysql\"}", "legendFormat": "connections" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "运行中的线程",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "mysql_global_status_threads_running{job=\"mysql\"}", "legendFormat": "running" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "慢查询数",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "mysql_global_status_slow_queries{job=\"mysql\"}", "legendFormat": "slow queries" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "QPS (查询/秒)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "rate(mysql_global_status_queries{job=\"mysql\"}[1m])", "legendFormat": "QPS" }]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "MySQL连接数趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "mysql_global_status_threads_connected{job=\"mysql\"}", "legendFormat": "已连接" },
+        { "expr": "mysql_global_status_threads_running{job=\"mysql\"}", "legendFormat": "运行中" },
+        { "expr": "mysql_global_variables_max_connections{job=\"mysql\"}", "legendFormat": "最大连接数" }
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "查询吞吐量 (QPS/TPS)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        { "expr": "rate(mysql_global_status_queries{job=\"mysql\"}[1m])", "legendFormat": "Queries/s" },
+        { "expr": "rate(mysql_global_status_com_commit{job=\"mysql\"}[1m]) + rate(mysql_global_status_com_rollback{job=\"mysql\"}[1m])", "legendFormat": "TPS" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "网络流量 (收/发)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "rate(mysql_global_status_bytes_received{job=\"mysql\"}[1m])", "legendFormat": "接收" },
+        { "expr": "rate(mysql_global_status_bytes_sent{job=\"mysql\"}[1m])", "legendFormat": "发送" }
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "InnoDB缓冲池使用",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "mysql_global_status_buffer_pool_pages{state=\"data\"}*mysql_global_variables_innodb_page_size{job=\"mysql\"}", "legendFormat": "数据页" },
+        { "expr": "mysql_global_status_buffer_pool_pages{state=\"free\"}*mysql_global_variables_innodb_page_size{job=\"mysql\"}", "legendFormat": "空闲页" },
+        { "expr": "mysql_global_variables_innodb_buffer_pool_size{job=\"mysql\"}", "legendFormat": "总大小" }
+      ]
+    }
+  ]
+}

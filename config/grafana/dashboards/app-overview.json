@@ -1,0 +1,78 @@
+{
+  "annotations": { "list": [] },
+  "title": "日志采集平台总览",
+  "uid": "app-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["filebeat", "overview"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Filebeat采集事件/秒",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "rate(filebeat_output_events_total{job=\"filebeat\"}[1m])", "legendFormat": "events/s" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Kafka输出ACK总数",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "filebeat_output_kafka_events_acked{job=\"filebeat\"}", "legendFormat": "acked" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Consumer Lag总量",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(kafka_consumergroup_lag{job=\"kafka\"})", "legendFormat": "total lag" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "MySQL总记录数",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "mysql_global_status_queries{job=\"mysql\"}", "legendFormat": "total queries" }]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Filebeat采集→Kafka发送趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "eps" } },
+      "targets": [
+        { "expr": "rate(filebeat_output_events_total{job=\"filebeat\"}[1m])", "legendFormat": "输出事件/秒" },
+        { "expr": "rate(filebeat_output_kafka_events_acked{job=\"filebeat\"}[1m])", "legendFormat": "Kafka ACK/秒" }
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Consumer Lag趋势 (按分区)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "kafka_consumergroup_lag{job=\"kafka\"}", "legendFormat": "{{topic}} P{{partition}}" }]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Filebeat采集行数",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "rate(filebeat_input_log_filtered_total{job=\"filebeat\"}[1m]) + 0", "legendFormat": "filtered {{input_id}}" },
+        { "expr": "increase(filebeat_input_log_done_total{job=\"filebeat\"}[1m])", "legendFormat": "done {{input_id}}" }
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Kafka消息生产/消费速率",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "increase(filebeat_output_kafka_events_acked{job=\"filebeat\"}[1m])", "legendFormat": "生产消息/分钟" },
+        { "expr": "increase(kafka_consumergroup_current_offset{job=\"kafka\"}[1m])", "legendFormat": "消费offset/分钟" }
+      ]
+    }
+  ]
+}

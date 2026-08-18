@@ -1,0 +1,69 @@
+{
+  "annotations": { "list": [] },
+  "title": "Kafka集群监控",
+  "uid": "kafka-monitor",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["kafka", "kafka-exporter"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Topic总数",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "count(kafka_topic_partitions{job=\"kafka\"})", "legendFormat": "topics" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "总分区数",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(kafka_topic_partitions{job=\"kafka\"})", "legendFormat": "partitions" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Under-Replicated Partitions",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(kafka_topic_under_replicated_partition{job=\"kafka\"})", "legendFormat": "URP" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "总Consumer Lag",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(kafka_consumergroup_lag{job=\"kafka\"})", "legendFormat": "total lag" }]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Consumer Group Lag (按分区)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "kafka_consumergroup_lag{job=\"kafka\"}", "legendFormat": "{{consumergroup}} {{topic}} P{{partition}}" }]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Consumer Group Current Offset",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "kafka_consumergroup_current_offset{job=\"kafka\"}", "legendFormat": "{{consumergroup}} {{topic}} P{{partition}}" }]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Topic Log Size (消息数)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "expr": "kafka_topic_partition_current_offset{job=\"kafka\"}", "legendFormat": "{{topic}} P{{partition}}" }]
+    },
+    {
+      "id": 8, "type": "table", "title": "分区详情",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "kafka_topic_partition_current_offset{job=\"kafka\"}", "legendFormat": "{{topic}} P{{partition}}", "format": "table", "instant": true }]
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "annotations": { "list": [] },
+  "title": "主机系统监控",
+  "uid": "host-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["node-exporter", "host"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "CPU使用率",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 60}, {"color": "red", "value": 85}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[1m])) * 100)", "legendFormat": "{{instance}}" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "内存使用率",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 70}, {"color": "red", "value": 90}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "(1 - (node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})) * 100", "legendFormat": "{{instance}}" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "磁盘使用率",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "thresholds": { "mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "(1 - (node_filesystem_avail_bytes{job=\"node\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|overlay\"})) * 100", "legendFormat": "{{mountpoint}}" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "运行时间",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "node_time_seconds_total{job=\"node\"} - node_boot_time_seconds{job=\"node\"}", "legendFormat": "uptime" }]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "CPU使用率趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent" } },
+      "targets": [{ "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[1m])) * 100)", "legendFormat": "CPU {{instance}}" }]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "内存使用趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes{job=\"node\"}", "legendFormat": "总内存" },
+        { "expr": "node_memory_MemAvailable_bytes{job=\"node\"}", "legendFormat": "可用内存" },
+        { "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}", "legendFormat": "已用内存" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "磁盘IO",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "rate(node_disk_read_bytes_total{job=\"node\"}[1m])", "legendFormat": "读取 {{device}}" },
+        { "expr": "rate(node_disk_written_bytes_total{job=\"node\"}[1m])", "legendFormat": "写入 {{device}}" }
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "网络流量",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!~\"lo|docker.*\"}[1m])", "legendFormat": "接收 {{device}}" },
+        { "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!~\"lo|docker.*\"}[1m])", "legendFormat": "发送 {{device}}" }
+      ]
+    }
+  ]
+}

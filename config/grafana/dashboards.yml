@@ -1,0 +1,16 @@
+# Grafana 仪表盘自动配置
+# 作用：Grafana启动时自动加载dashboards目录下的JSON仪表盘文件
+# 机制：通过Grafana的provisioning机制，无需手动在UI导入
+
+apiVersion: 1
+
+providers:
+  - name: 'Kafka Log Platform Dashboards'
+    orgId: 1
+    folder: 'Kafka日志收集平台'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /opt/grafana/dashboards

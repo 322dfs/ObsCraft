@@ -1,0 +1,84 @@
+{
+  "annotations": { "list": [] },
+  "title": "Redis监控",
+  "uid": "redis-monitor",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["redis", "redis-exporter"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "已连接客户端",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "redis_connected_clients{job=\"redis\"}", "legendFormat": "clients" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "内存使用",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "redis_memory_used_bytes{job=\"redis\"}", "legendFormat": "used" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "命中率",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "thresholds": { "mode": "absolute", "steps": [{"color": "red"}, {"color": "yellow", "value": 80}, {"color": "green", "value": 95}] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "(redis_keyspace_hits{job=\"redis\"} / (redis_keyspace_hits{job=\"redis\"} + redis_keyspace_misses{job=\"redis\"})) * 100", "legendFormat": "hit rate" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Key总数",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(redis_db_keys{job=\"redis\"})", "legendFormat": "total keys" }]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "内存使用趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        { "expr": "redis_memory_used_bytes{job=\"redis\"}", "legendFormat": "已用内存" },
+        { "expr": "redis_memory_max_bytes{job=\"redis\"}", "legendFormat": "最大内存" },
+        { "expr": "redis_memory_used_rss_bytes{job=\"redis\"}", "legendFormat": "RSS" }
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "命令执行/秒",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        { "expr": "rate(redis_commands_processed_total{job=\"redis\"}[1m])", "legendFormat": "commands/s" },
+        { "expr": "rate(redis_keyspace_hits{job=\"redis\"}[1m])", "legendFormat": "hits/s" },
+        { "expr": "rate(redis_keyspace_misses{job=\"redis\"}[1m])", "legendFormat": "misses/s" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "连接数趋势",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        { "expr": "redis_connected_clients{job=\"redis\"}", "legendFormat": "客户端连接" },
+        { "expr": "redis_blocked_clients{job=\"redis\"}", "legendFormat": "阻塞客户端" }
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "网络流量",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "rate(redis_net_input_bytes_total{job=\"redis\"}[1m])", "legendFormat": "接收" },
+        { "expr": "rate(redis_net_output_bytes_total{job=\"redis\"}[1m])", "legendFormat": "发送" }
+      ]
+    }
+  ]
+}

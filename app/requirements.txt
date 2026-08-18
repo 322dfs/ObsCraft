@@ -1,0 +1,6 @@
+kafka-python==2.0.2
+celery==5.3.4
+redis==5.0.1
+PyMySQL==1.1.0
+requests==2.31.0
+cryptography==42.0.8

@@ -1,0 +1,334 @@
+# Docker Compose 编排文件
+# 项目：基于Kafka的分布式日志收集与实时可观测性平台
+# 使用：docker compose up -d  启动
+#       docker compose ps     查看状态
+#       docker compose down   停止
+#       docker compose logs -f 查看日志
+
+services:
+  # ==================== 1. Nginx 负载均衡器 ====================
+  nginx-lb:
+    image: nginx:1.25-alpine
+    container_name: nginx-lb
+    ports:
+      - "80:80"
+    volumes:
+      - ./config/nginx/nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web-1
+      - web-2
+      - web-3
+    networks:
+      - kafka-net
+
+  # ==================== 2. 三台Web服务器 ====================
+  web-1:
+    image: nginx:1.25-alpine
+    container_name: web-1
+    volumes:
+      - ./config/nginx/nginx-web.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/index.html:/usr/share/nginx/html/index.html:ro
+      - ./data/logs/web-1:/var/log/nginx
+    networks:
+      - kafka-net
+
+  web-2:
+    image: nginx:1.25-alpine
+    container_name: web-2
+    volumes:
+      - ./config/nginx/nginx-web.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/index.html:/usr/share/nginx/html/index.html:ro
+      - ./data/logs/web-2:/var/log/nginx
+    networks:
+      - kafka-net
+
+  web-3:
+    image: nginx:1.25-alpine
+    container_name: web-3
+    volumes:
+      - ./config/nginx/nginx-web.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/index.html:/usr/share/nginx/html/index.html:ro
+      - ./data/logs/web-3:/var/log/nginx
+    networks:
+      - kafka-net
+
+  # ==================== 3. Filebeat 日志采集 ====================
+  filebeat:
+    image: elastic/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./config/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./data/logs:/logs:ro
+    command: ["filebeat", "-e", "-strict.perms=false"]
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 4. Kafka集群 (3节点 KRaft模式) ====================
+  kafka-1:
+    image: apache/kafka:latest
+    container_name: kafka-1
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_NUM_PARTITIONS=6
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - ./data/kafka-1:/tmp/kafka-logs
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kafka-net
+
+  kafka-2:
+    image: apache/kafka:latest
+    container_name: kafka-2
+    environment:
+      - KAFKA_NODE_ID=2
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_NUM_PARTITIONS=6
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - ./data/kafka-2:/tmp/kafka-logs
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kafka-net
+
+  kafka-3:
+    image: apache/kafka:latest
+    container_name: kafka-3
+    environment:
+      - KAFKA_NODE_ID=3
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-3:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_NUM_PARTITIONS=6
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - ./data/kafka-3:/tmp/kafka-logs
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kafka-net
+
+  # ==================== 5. MySQL 数据库 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=LogPlatform@2024
+    volumes:
+      - ./config/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./config/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./data/mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pLogPlatform@2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kafka-net
+
+  # ==================== 6. Redis (Celery broker) ====================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kafka-net
+
+  # ==================== 7. Python 消费者 ====================
+  consumer:
+    build: ./app
+    container_name: consumer
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SMTP_USER=2080981057@qq.com
+      - SMTP_PASS=tfcoklhbxqtjegah
+      - TO_EMAIL=2080981057@qq.com
+      - DINGTALK_WEBHOOK=
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 8. Celery Worker (异步告警) ====================
+  celery-worker:
+    build: ./app
+    container_name: celery-worker
+    command: celery -A celery_app worker --loglevel=info
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SMTP_USER=2080981057@qq.com
+      - SMTP_PASS=tfcoklhbxqtjegah
+      - TO_EMAIL=2080981057@qq.com
+      - DINGTALK_WEBHOOK=
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 9. cAdvisor (容器资源监控) ====================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: cadvisor
+    volumes:
+      - /var/lib/docker:/var/lib/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+    networks:
+      - kafka-net
+
+  # ==================== 10. Node Exporter (主机系统指标) ====================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - kafka-net
+
+  # ==================== 11. Kafka Exporter (Kafka集群指标) ====================
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - '--kafka.server=kafka-1:9092'
+      - '--kafka.server=kafka-2:9092'
+      - '--kafka.server=kafka-3:9092'
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 12. MySQL Exporter (数据库指标) ====================
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: mysqld-exporter
+    volumes:
+      - ./config/mysql/exporter-my.cnf:/cfg/my.cnf:ro
+    command:
+      - '--config.my-cnf=/cfg/my.cnf'
+    ports:
+      - "9104:9104"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 13. Redis Exporter (Redis指标) ====================
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - kafka-net
+
+  # ==================== 14. Prometheus (监控采集) ====================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - cadvisor
+      - node-exporter
+    networks:
+      - kafka-net
+
+  # ==================== 15. Grafana (可视化仪表盘) ====================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_USER=admin
+    volumes:
+      - ./config/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./config/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./config/grafana/dashboards:/opt/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - kafka-net
+
+# ==================== 网络 ====================
+networks:
+  kafka-net:
+    driver: bridge
