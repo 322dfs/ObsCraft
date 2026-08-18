@@ -200,45 +200,35 @@ docker compose up -d
 
 ## 监控展示
 
-> 截图待补充 — 以下是 6 个 Grafana 仪表盘的实际效果。
-
 ### 主机概览
 
-![主机概览](docs/screenshots/host-overview.png)
+![主机概览](docs/screenshots/主机概览.png)
 
 ### Kafka 集群监控
 
-![Kafka 监控](docs/screenshots/kafka-monitor.png)
+![Kafka集群监控](docs/screenshots/Kafka集群监控.png)
 
 ### MySQL 监控
 
-![MySQL 监控](docs/screenshots/mysql-monitor.png)
+![MySQL监控](docs/screenshots/MySQL监控.png)
 
 ### Redis 监控
 
-![Redis 监控](docs/screenshots/redis-monitor.png)
+![Redis监控](docs/screenshots/Redis监控.png)
 
 ### 容器资源概览
 
-![容器概览](docs/screenshots/container-overview.png)
+![容器资源概览](docs/screenshots/容器资源概览.png)
 
 ### 应用层综合概览
 
-![应用概览](docs/screenshots/app-overview.png)
+![应用层综合概览](docs/screenshots/应用层综合概览.png)
 
 ---
 
 ## 告警展示
 
 > 截图待补充 — 当 Consumer 检测到 4xx/5xx 状态码时，Celery 异步触发双通道告警。
-
-### 邮件告警
-
-![邮件告警](docs/screenshots/alert-email.png)
-
-### 钉钉告警
-
-![钉钉告警](docs/screenshots/alert-dingtalk.png)
 
 ---
 
