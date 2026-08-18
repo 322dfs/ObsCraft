@@ -71,7 +71,7 @@
 
 ### 场景四：SLA 监控与告警
 
-当 Web 服务出现 5xx 错误时，Celery Worker 自动发送邮件 + 钉钉双通道告警，运维团队可在用户投诉前感知并处理故障。Grafana 仪表盘展示错误率趋势，用于 SLA 达成率计算。
+当 Web 服务出现 5xx 错误时，Celery Worker 自动发送邮件告警，运维团队可在用户投诉前感知并处理故障。Grafana 仪表盘展示错误率趋势，用于 SLA 达成率计算。
 
 ---
 
@@ -149,7 +149,7 @@ flowchart TB
 | 消息队列 | Kafka (KRaft) | 3 节点集群，6 分区 3 副本，高可用缓冲 |
 | 消费者 | Python 3.9 | 日志解析、批量入库、异常检测 |
 | 数据库 | MySQL 8.0 | 日志持久化，索引优化 |
-| 异步告警 | Celery + Redis | 4xx/5xx 实时告警，邮件 + 钉钉双通道 |
+| 异步告警 | Celery + Redis | 4xx/5xx 实时邮件告警 |
 | 指标采集 | Prometheus | 6 个 exporter 目标，15s 采集 |
 | 可视化 | Grafana 10.4 | 6 个预置仪表盘 |
 | 编排 | Docker Compose | 18 个容器一键管理 |
@@ -164,7 +164,7 @@ kafka-log-platform/
 ├── app/                         # Python 应用
 │   ├── Dockerfile              #   Consumer + Celery 共用镜像
 │   ├── consumer.py             #   Kafka 消费：解析→入库→触发告警
-│   ├── tasks.py                #   Celery 任务：邮件+钉钉双通道告警
+│   ├── tasks.py                #   Celery 任务：邮件告警
 │   ├── celery_app.py           #   Celery 实例 (Redis broker)
 │   └── requirements.txt        #   Python 依赖
 ├── config/                      # 配置文件
@@ -228,7 +228,11 @@ docker compose up -d
 
 ## 告警展示
 
-> 截图待补充 — 当 Consumer 检测到 4xx/5xx 状态码时，Celery 异步触发双通道告警。
+当 Consumer 检测到 4xx/5xx 状态码时，通过 Celery 异步触发邮件告警。
+
+### 邮件告警
+
+![邮件告警](docs/screenshots/邮件告警.png)
 
 ---
 
@@ -244,7 +248,7 @@ docker compose up -d
 
 1. **Filebeat** 挂载 3 台 Web 日志目录，round-robin 生产到 Kafka 6 分区
 2. **Consumer** 拉取消息 → JSON 解析 → Nginx 正则提取 → 批量入库（BATCH_SIZE=100）
-3. **告警** 检测 4xx/5xx → `send_alert.delay()` → Celery 异步 → 邮件 + 钉钉
+3. **告警** 检测 4xx/5xx → `send_alert.delay()` → Celery 异步 → 邮件告警
 
 ### 监控体系
 
