@@ -1,12 +1,18 @@
-﻿# ObsCraft — 基于 Kafka 的分布式日志收集与实时可观测性平台
+# ObsCraft — 基于 Kafka 的分布式日志收集与实时可观测性平台
 
-> 企业级日志收集链路 + 异步告警 + 全维度监控，18 个容器一键编排。
+> Nginx 负载均衡模拟 3 台 Web 服务器 → Filebeat 采集日志到 Kafka 集群 → Python 消费者解析入库 → Celery 异步告警 → Prometheus + Grafana 全链路监控。18 个容器一键编排。
+
+| 容器数 | Kafka 分区 | Kafka 副本 | Grafana 仪表盘 | 采集目标 | 批量入库 |
+|:------:|:----------:|:----------:|:--------------:|:--------:|:--------:|
+| 18 | 6 | 3 | 6 | 6 | 100 条/批 |
 
 ---
 
 ## 目录
 
-- [项目简介](#项目简介)
+- [项目背景](#项目背景)
+- [项目价值](#项目价值)
+- [企业应用场景](#企业应用场景)
 - [系统架构](#系统架构)
 - [技术栈](#技术栈)
 - [项目结构](#项目结构)
@@ -18,56 +24,118 @@
 
 ---
 
-## 项目简介
+## 项目背景
 
-Nginx 三台 Web 服务器产生访问日志 → Filebeat 采集并生产到 Kafka 集群 → Python 消费者解析清洗、批量入库 MySQL → 检测到 4xx/5xx 错误时通过 Celery 异步触发邮件 + 钉钉双通道告警。同时 Prometheus 采集 6 个维度的指标，Grafana 预置 6 个仪表盘实现全链路可观测。
+在企业级微服务架构中，Web 服务器通常以多实例方式部署在高可用负载均衡器后端。每台服务器每天产生大量访问日志（access.log）和错误日志（error.log），这些日志分散在各个服务器节点上，存在以下痛点：
+
+- **日志分散**：运维人员需要逐台 SSH 登录服务器查看日志，排查效率极低
+- **无实时告警**：HTTP 5xx 错误和 4xx 异常无法在发生时立即通知到运维人员
+- **无历史分析**：日志随时间轮转覆盖，无法对历史数据进行 SQL 查询和趋势分析
+- **无统一监控**：各组件（Kafka、MySQL、Redis 等）的运行状态无统一视图
+
+本项目通过引入 Kafka 作为日志消息中间件，将日志采集与日志消费解耦，实现日志的集中存储、实时分析和自动告警，同时通过 Prometheus + Grafana 构建完整的可观测性体系。
+
+---
+
+## 项目价值
+
+### 技术价值
+
+- **生产者-消费者解耦**：Filebeat 只负责采集生产到 Kafka，Consumer 按自己的节奏消费入库，互不阻塞。即使 MySQL 短暂宕机，日志消息也不会丢失（Kafka 持久化保留）
+- **削峰填谷**：流量高峰时 Kafka 作为缓冲池，Consumer 按固定速率消费，避免数据库被瞬时写入压垮
+- **KRaft 模式去 ZooKeeper**：使用 Kafka 的 KRaft 共识协议替代 ZooKeeper，减少运维组件，简化部署架构
+- **异步告警**：通过 Celery + Redis 将告警发送异步化，Consumer 检测到错误后不阻塞消费流程
+
+### 业务价值
+
+- **实时可观测**：运维人员通过 Grafana 仪表盘即可了解全链路状态，无需逐节点排查
+- **秒级告警**：HTTP 4xx/5xx 错误发生后 0.3~0.6 秒内收到邮件告警
+- **数据可查**：日志入库 MySQL 后可通过 SQL 进行多维分析（按状态码、服务器、时间范围查询）
+- **容量规划**：通过 Kafka Consumer Lag 指标可判断是否需要扩容消费者
+
+---
+
+## 企业应用场景
+
+### 场景一：电商大促日志监控
+
+双十一等大促期间，Web 服务器 QPS 飙升 10~100 倍，日志量暴增。Kafka 集群作为缓冲池存储海量日志消息，Consumer 按数据库写入能力匀速消费，避免数据库被压垮。运维通过 Grafana 监控 Consumer Lag，当 Lag 持续增长时动态扩容消费者实例。
+
+### 场景二：安全审计与合规
+
+金融行业要求所有访问日志保留至少 6 个月。日志通过 Kafka 持久化后入库 MySQL，可按 IP、时间、URL 进行安全审计查询，识别异常访问模式（如短时间内大量 404 请求可能为恶意扫描）。
+
+### 场景三：微服务链路追踪
+
+在微服务架构中，Nginx 作为 API 网关记录所有入站请求。通过 Filebeat 采集后统一存入 Kafka，可用于后续的链路追踪分析，将 Nginx 访问日志与应用服务日志关联，实现端到端请求追踪。
+
+### 场景四：SLA 监控与告警
+
+当 Web 服务出现 5xx 错误时，Celery Worker 自动发送邮件 + 钉钉双通道告警，运维团队可在用户投诉前感知并处理故障。Grafana 仪表盘展示错误率趋势，用于 SLA 达成率计算。
 
 ---
 
 ## 系统架构
 
 ```mermaid
-graph LR
-    Client["客户端请求"] --> LB["Nginx 负载均衡 :80"]
-
-    LB --> Web1["Web-1"]
-    LB --> Web2["Web-2"]
-    LB --> Web3["Web-3"]
-
-    Web1 -- "access.log / error.log" --> FB["Filebeat 日志采集"]
-    Web2 -- "access.log / error.log" --> FB
-    Web3 -- "access.log / error.log" --> FB
-
-    FB -- "生产消息" --> Kafka["Kafka 集群<br/>3节点 KRaft · 6分区3副本"]
-
-    Kafka -- "消费 (Consumer Group)" --> Consumer["Python Consumer<br/>解析 · 批量入库 · 检测异常"]
-
-    Consumer -- "批量 INSERT" --> MySQL[("MySQL<br/>access_logs 表")]
-    Consumer -- "send_alert.delay()" --> Celery["Celery Worker<br/>异步告警"]
-
-    Celery --> Redis[("Redis<br/>Broker")]
-    Celery -- "SMTP" --> Mail["邮件告警"]
-    Celery -- "Webhook" --> DingTalk["钉钉告警"]
-
-    subgraph 监控体系
-        Prometheus["Prometheus<br/>15s 采集间隔"]
-        Prometheus --> NE["node-exporter<br/>主机 CPU/内存/磁盘"]
-        Prometheus --> KE["kafka-exporter<br/>集群健康/Lag"]
-        Prometheus --> ME["mysqld-exporter<br/>QPS/连接/慢查询"]
-        Prometheus --> RE["redis-exporter<br/>内存/连接"]
-        Prometheus --> CA["cAdvisor<br/>容器资源"]
-        Prometheus --> Prometheus
-        Grafana["Grafana<br/>6 个仪表盘"]
-        Prometheus --> Grafana
+flowchart TB
+    subgraph 用户请求层
+        CLIENT[客户端请求]
     end
 
-    style LB fill:#4EC9B0,color:#1e1e1e
-    style Kafka fill:#F28C28,color:#fff
-    style MySQL fill:#00758F,color:#fff
-    style Redis fill:#D92E2E,color:#fff
-    style Grafana fill:#E8A735,color:#1e1e1e
-    style Consumer fill:#3776AB,color:#fff
-    style Celery fill:#37814A,color:#fff
+    subgraph 负载均衡层
+        LB[Nginx-LB :80]
+    end
+
+    subgraph Web服务器层
+        W1[Web-1 :80]
+        W2[Web-2 :80]
+        W3[Web-3 :80]
+    end
+
+    subgraph 日志采集层
+        FB[Filebeat 8.13]
+    end
+
+    subgraph Kafka集群 KRaft模式
+        K1[Kafka-1 :9092]
+        K2[Kafka-2 :9092]
+        K3[Kafka-3 :9092]
+    end
+
+    subgraph 消费与存储层
+        CONS[Python Consumer]
+        MYSQL[(MySQL 8.0 :3306)]
+    end
+
+    subgraph 异步告警层
+        CELERY[Celery Worker]
+        REDIS[(Redis 7 :6379)]
+        MAIL[QQ邮箱告警]
+    end
+
+    subgraph 监控可观测层
+        PROM[Prometheus :9090]
+        GRAF[Grafana :3000]
+        NE[node-exporter :9100]
+        KE[kafka-exporter :9308]
+        ME[mysqld-exporter :9104]
+        RE[redis-exporter :9121]
+        CAD[cAdvisor :8080]
+    end
+
+    CLIENT --> LB
+    LB --> W1 & W2 & W3
+    W1 & W2 & W3 -->|access.log/error.log| FB
+    FB -->|生产消息| K1 & K2 & K3
+    K1 & K2 & K3 -->|消费消息| CONS
+    CONS -->|批量INSERT| MYSQL
+    CONS -->|4xx/5xx检测| CELERY
+    CELERY --> REDIS
+    CELERY --> MAIL
+
+    NE & KE & ME & RE & CAD --> PROM
+    PROM --> GRAF
 ```
 
 ---
@@ -136,32 +204,26 @@ docker compose up -d
 
 ### 主机概览
 
-<!-- 截图占位：host-overview 仪表盘 -->
 ![主机概览](docs/screenshots/host-overview.png)
 
 ### Kafka 集群监控
 
-<!-- 截图占位：kafka-monitor 仪表盘 -->
 ![Kafka 监控](docs/screenshots/kafka-monitor.png)
 
 ### MySQL 监控
 
-<!-- 截图占位：mysql-monitor 仪表盘 -->
 ![MySQL 监控](docs/screenshots/mysql-monitor.png)
 
 ### Redis 监控
 
-<!-- 截图占位：redis-monitor 仪表盘 -->
 ![Redis 监控](docs/screenshots/redis-monitor.png)
 
 ### 容器资源概览
 
-<!-- 截图占位：container-overview 仪表盘 -->
 ![容器概览](docs/screenshots/container-overview.png)
 
 ### 应用层综合概览
 
-<!-- 截图占位：app-overview 仪表盘 -->
 ![应用概览](docs/screenshots/app-overview.png)
 
 ---
@@ -172,12 +234,10 @@ docker compose up -d
 
 ### 邮件告警
 
-<!-- 截图占位：邮件告警截图 -->
 ![邮件告警](docs/screenshots/alert-email.png)
 
 ### 钉钉告警
 
-<!-- 截图占位：钉钉告警截图 -->
 ![钉钉告警](docs/screenshots/alert-dingtalk.png)
 
 ---
